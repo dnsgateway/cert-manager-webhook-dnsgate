@@ -122,9 +122,10 @@ func newSecrets(cfg *restclient.Config) (corev1client.SecretsGetter, error) {
 
 // Present adds ch.Key at the Challenge Target.
 func (s *Solver) Present(ch *whapi.ChallengeRequest) error {
-	return s.call(ch, actionPresent, &dnsgatev1.PatchRecordRequest{
-		Ttl: defaultTTL,
-		Add: []*dnsgatev1.RecordValue{{Value: txtValue(ch.Key)}},
+	return s.call(ch, change{
+		act: actionPresent,
+		ttl: defaultTTL,
+		add: []*dnsgatev1.RecordValue{{Value: txtValue(ch.Key)}},
 	})
 }
 
@@ -132,25 +133,38 @@ func (s *Solver) Present(ch *whapi.ChallengeRequest) error {
 // value there alone. Removing a value the RRset does not hold changes
 // nothing, so a retried CleanUp succeeds.
 func (s *Solver) CleanUp(ch *whapi.ChallengeRequest) error {
-	return s.call(ch, actionCleanUp, &dnsgatev1.PatchRecordRequest{
-		Remove: []string{txtValue(ch.Key)},
+	return s.call(ch, change{
+		act:    actionCleanUp,
+		remove: []string{txtValue(ch.Key)},
 	})
 }
 
 // txtValue returns key in TXT presentation form.
 func txtValue(key string) string { return `"` + key + `"` }
 
-// call runs act for ch and logs it: it sends patch, the values to add or
-// remove, to the Gateway at the Challenge Target with the token.
-func (s *Solver) call(ch *whapi.ChallengeRequest, act action, patch *dnsgatev1.PatchRecordRequest) error {
+// change is what one call of the solver does at the Challenge Target:
+// its action, as logged, and the TXT values it adds, with their TTL, or
+// removes.
+type change struct {
+	act    action
+	ttl    uint32
+	add    []*dnsgatev1.RecordValue
+	remove []string
+}
+
+// call makes c at the Challenge Target of ch and logs it.
+func (s *Solver) call(ch *whapi.ChallengeRequest, c change) error {
 	start := time.Now()
-	err := s.patch(ch, patch)
-	s.logCall(ch, act, err, time.Since(start))
+	err := s.patch(ch, c)
+	s.logCall(ch, c.act, err, time.Since(start))
 
 	return err
 }
 
-func (s *Solver) patch(ch *whapi.ChallengeRequest, patch *dnsgatev1.PatchRecordRequest) error {
+// patch makes c at the Challenge Target of ch: it reads the token from
+// the Secret the config of ch names and sends c to the Gateway in one
+// PatchRecord, bounded by the solver's timeout.
+func (s *Solver) patch(ch *whapi.ChallengeRequest, c change) error {
 	deps := s.clients.Load()
 	if deps == nil {
 		return errors.New("the webhook is not initialized yet")
@@ -179,12 +193,12 @@ func (s *Solver) patch(ch *whapi.ChallengeRequest, patch *dnsgatev1.PatchRecordR
 		Zone:   target.zone,
 		Name:   target.name,
 		Type:   "TXT",
-		Ttl:    patch.GetTtl(),
-		Add:    patch.GetAdd(),
-		Remove: patch.GetRemove(),
+		Ttl:    c.ttl,
+		Add:    c.add,
+		Remove: c.remove,
 	})
 	if err != nil {
-		return newGatewayFailure(err, patch.GetTtl())
+		return newGatewayFailure(err, c.ttl)
 	}
 
 	return nil
