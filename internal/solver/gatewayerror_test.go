@@ -123,6 +123,13 @@ func TestPresentNeverRetriesAFailedGatewayCall(t *testing.T) {
 	}
 }
 
+func TestCleanUpNamesNoTTLWhenTheGatewayRefusesTheRecord(t *testing.T) {
+	s, gw := newSolver(tokenSecret("team-a", "dnsgate", map[string]string{"token": "tok-a"}))
+	gw.err = statusError(codes.InvalidArgument, "bad value "+validKey, &dnsgatev1.Error{Category: dnsgatev1.Error_CATEGORY_INVALID_RECORD})
+
+	checkError(t, s.CleanUp(cleanUpChallenge(`{"tokenSecretRef":{"name":"dnsgate"}}`)), "the Gateway refused the record")
+}
+
 func TestAGatewayFailureNeverShowsTheTokenOrTheKey(t *testing.T) {
 	const token = "tok-secret-a"
 
