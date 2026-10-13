@@ -149,8 +149,11 @@ func (s *Solver) Present(ch *whapi.ChallengeRequest) error {
 		Ttl:   defaultTTL,
 		Add:   []*dnsgatev1.RecordValue{{Value: `"` + ch.Key + `"`}},
 	})
+	if err != nil {
+		return gatewayFailed(err, defaultTTL)
+	}
 
-	return err
+	return nil
 }
 
 // CleanUp is not implemented yet.
