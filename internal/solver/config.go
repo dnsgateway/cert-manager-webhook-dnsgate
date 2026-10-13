@@ -34,6 +34,9 @@ const defaultSecretKey = "token"
 // config is a cert-manager Issuer's solver config.
 type config struct {
 	TokenSecretRef secretRef `json:"tokenSecretRef"`
+	// Zone is the zone the Challenge Target is written in; empty means
+	// the zone cert-manager resolved.
+	Zone string `json:"zone"`
 }
 
 // secretRef names the Secret, in the request's ResourceNamespace, that
