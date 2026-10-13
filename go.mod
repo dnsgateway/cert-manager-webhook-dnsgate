@@ -5,6 +5,7 @@ go 1.27
 require (
 	github.com/cert-manager/cert-manager v1.21.2
 	github.com/dnsgateway/dnsgate-go v0.0.0-20261012191026-767f93a9cf23
+	github.com/go-logr/logr v1.4.3
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	google.golang.org/grpc v1.84.0
@@ -14,6 +15,7 @@ require (
 	k8s.io/apimachinery v0.36.2
 	k8s.io/client-go v0.36.2
 	k8s.io/component-base v0.36.2
+	k8s.io/klog/v2 v2.140.0
 )
 
 require (
@@ -31,7 +33,6 @@ require (
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.1 // indirect
-	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
 	github.com/go-openapi/jsonpointer v0.23.1 // indirect
@@ -100,7 +101,6 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	k8s.io/apiserver v0.36.2 // indirect
-	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kms v0.36.2 // indirect
 	k8s.io/kube-openapi v0.0.0-20260501160325-927ab1f70cd6 // indirect
 	k8s.io/streaming v0.36.2 // indirect
