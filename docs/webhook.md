@@ -295,7 +295,7 @@ cert-manager-webhook-dnsgate/
   cmd/                    server.NewCommandStartWebhookServer(ctx, groupName, solver) + the webhook's own flags
   internal/solver/        Solver: config, Secret lookup, zone, Present, CleanUp
   charts/cert-manager-webhook-dnsgate/
-  test/conformance/       cert-manager's DNS conformance suite
+  test/e2e/               end-to-end test against a deployed webhook
   Dockerfile, .goreleaser.yaml, Makefile
 ```
 
@@ -306,7 +306,7 @@ cert-manager-webhook-dnsgate/
 ## Tests
 
 - **Unit tests** for config parsing, the namespace rule, the zone, and the mapping of Gateway errors, against a fake `Solver` client interface around `client.Client`.
-- **cert-manager's conformance suite** (`github.com/cert-manager/cert-manager/test/acme`), which presents and cleans up values and checks them by DNS lookup. It needs a Provider that serves real DNS, so it runs against a Gateway onboarded with a sandbox zone at a real Provider, in a manually triggered CI job with secrets.
+- **An end-to-end test** (`test/e2e/`, `make e2e`) against a cluster where cert-manager and the webhook are already deployed. It creates a namespace, a token Secret and an ACME cert-manager Issuer (Let's Encrypt staging by default) whose DNS-01 solver is the webhook, issues a Certificate for a random name in a test zone, waits for it to become Ready, then deletes everything it created. It needs a zone served in public DNS by a real Provider behind the Gateway, and a Service Token with `patch` on TXT records at `_acme-challenge` names in it. It is built only with the `e2e` build tag, skips itself when its settings are unset, and is run by hand; no CI workflow runs it. Its settings are in the README.
 
 There are no integration tests against an in-process Gateway: none can be started from another module. See Open Questions.
 
