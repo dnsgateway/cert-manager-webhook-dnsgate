@@ -179,7 +179,7 @@ func (s *Solver) patch(ch *whapi.ChallengeRequest, c change) (string, error) {
 	}
 
 	if cfg.Zone != "" {
-		zone = strings.TrimSuffix(cfg.Zone, ".")
+		zone = cfg.Zone
 	}
 
 	target, err := challengeTarget(ch.ResolvedFQDN, zone)

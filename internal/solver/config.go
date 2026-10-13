@@ -40,8 +40,8 @@ const defaultTTL = 600
 // config is a cert-manager Issuer's solver config.
 type config struct {
 	TokenSecretRef secretRef `json:"tokenSecretRef"`
-	// Zone is the zone the Challenge Target is written in; empty means
-	// the zone cert-manager resolved.
+	// Zone is the zone the Challenge Target is written in, without a
+	// trailing dot; empty means the zone cert-manager resolved.
 	Zone string `json:"zone"`
 	// TTL is the TTL of the challenge values added.
 	TTL uint32 `json:"ttl"`
@@ -87,6 +87,15 @@ func parseConfig(raw *apiextensionsv1.JSON) (config, error) {
 
 	if cfg.TokenSecretRef.Name == "" {
 		return config{}, invalidConfig("tokenSecretRef.name is required")
+	}
+
+	if cfg.Zone != "" {
+		zone := strings.TrimSuffix(cfg.Zone, ".")
+		if zone == "" {
+			return config{}, invalidConfig(fmt.Sprintf("zone %q names no zone", cfg.Zone))
+		}
+
+		cfg.Zone = zone
 	}
 
 	egress, ok := egresses[cfg.Egress]
