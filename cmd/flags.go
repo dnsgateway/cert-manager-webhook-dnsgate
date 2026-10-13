@@ -103,7 +103,7 @@ func (f *flagValues) addFlags(flags *pflag.FlagSet) {
 	flags.StringArrayVarP(&f.caFiles, flagCAFile, "", f.caFiles,
 		"PEM file of the CA certificates that verify the Gateway, instead of the system's; repeat it to trust several (env "+envCAFile+", a path list)")
 	flags.DurationVarP(&f.gatewayTimeout, flagGatewayTimeout, "", f.gatewayTimeout,
-		"bound on the Gateway round trip of one Present or CleanUp (env "+envGatewayTimeout+")")
+		"bound on the Gateway round trip of one Present or CleanUp, including the wait for the lock of its Challenge Target (env "+envGatewayTimeout+")")
 	flags.StringVarP(&f.logLevel, flagLogLevel, "", f.logLevel,
 		"lowest level of the logs written: "+logLevelNames()+" (env "+envLogLevel+")")
 }

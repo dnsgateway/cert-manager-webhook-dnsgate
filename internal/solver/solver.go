@@ -53,8 +53,9 @@ type Options struct {
 	// Kubernetes config. It is called once, by Initialize. Nil means a
 	// client-go clientset.
 	NewSecrets func(*restclient.Config) (corev1client.SecretsGetter, error)
-	// Timeout bounds the Gateway round trip of one call. It starts once
-	// the token Secret has been read, so the read does not count.
+	// Timeout bounds the Gateway round trip of one call, including the
+	// wait for the lock of its Challenge Target. It starts once the
+	// token Secret has been read, so the read does not count.
 	Timeout time.Duration
 	// Logger is where the solver logs each call. Nil means slog's default
 	// logger at the time of the call.
@@ -69,6 +70,9 @@ type Solver struct {
 	// runs Initialize as a post-start hook, so it may race with the first
 	// requests.
 	clients atomic.Pointer[clients]
+
+	// locks serialize the solver's Gateway calls per Challenge Target.
+	locks targetLocks
 }
 
 // clients are the solver's two dependencies.
@@ -216,6 +220,16 @@ func (s *Solver) patch(deps *clients, ch *whapi.ChallengeRequest, cfg config, zo
 
 	ctx, cancel := context.WithTimeout(context.Background(), s.opts.Timeout)
 	defer cancel()
+
+	unlock, err := s.locks.lock(ctx, target)
+	if errors.Is(err, context.DeadlineExceeded) {
+		return fmt.Errorf("timed out after %v waiting for another call at %s", s.opts.Timeout, target.fqdn())
+	}
+
+	if err != nil {
+		return fmt.Errorf("waiting for another call at %s: %w", target.fqdn(), err)
+	}
+	defer unlock()
 
 	_, err = deps.gateway.PatchRecord(ctx, &dnsgatev1.PatchRecordRequest{
 		Token:  token,

@@ -31,6 +31,21 @@ type target struct {
 	name string
 }
 
+// folded returns t with its zone and name case-folded, so targets that
+// differ only in case are equal.
+func (t target) folded() target {
+	return target{zone: strings.ToLower(t.zone), name: strings.ToLower(t.name)}
+}
+
+// fqdn returns the Challenge Target t names, without a trailing dot.
+func (t target) fqdn() string {
+	if t.name == apex {
+		return t.zone
+	}
+
+	return t.name + "." + t.zone
+}
+
 // challengeTarget makes fqdn, the Challenge Target, relative to zone,
 // which does not end in a dot. fqdn may; the name returned does not.
 func challengeTarget(fqdn, zone string) (target, error) {
