@@ -3,16 +3,25 @@ image:
   tag: edge-arm64
 
 args:
-  - --v=4
-  - --log-level=debug
-  - --gateway=dnsgate:443
+  # - --v=4
+  - --log-level=info
+  - --gateway=dnsgate.default.svc:443
   - --gateway-timeout=30s
-  # - --ca-file=/var/run/certs/ca.crt
+  - --ca-file=/etc/tls-certs/tls.crt
 
 tls:
   type: "helm"
 
 priorityClassName: system-cluster-critical
+
+volumes:
+  - name: tls-certs
+    secret:
+      secretName: dnsgate-tls
+volumeMounts:
+  - name: tls-certs
+    mountPath: /etc/tls-certs
+    readOnly: true
 
 podAntiAffinityPreset: hard
 podAntiAffinityPresetKey: kubernetes.io/hostname

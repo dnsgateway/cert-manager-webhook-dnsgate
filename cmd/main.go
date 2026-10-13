@@ -23,6 +23,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -31,11 +32,17 @@ import (
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	restclient "k8s.io/client-go/rest"
 	"k8s.io/component-base/logs"
 
 	"github.com/dnsgateway/dnsgate-go/client"
 
 	"github.com/dnsgateway/cert-manager-webhook-dnsgate/internal/solver"
+)
+
+var (
+	version = "dev"
+	commit  = "none"
 )
 
 func main() {
@@ -75,6 +82,16 @@ type deferredSolver struct {
 // Name returns the solver name, also before the solver is built.
 func (deferredSolver) Name() string { return solver.Name }
 
+// Initialize logs the build's version, once the server has set up its
+// logger, and initializes the solver.
+func (s deferredSolver) Initialize(kubeConfig *restclient.Config, stopCh <-chan struct{}) error {
+	slog.Info("starting cert-manager-webhook-dnsgate",
+		slog.String("version", version),
+		slog.String("commit", commit))
+
+	return s.Solver.Initialize(kubeConfig, stopCh)
+}
+
 // newApp returns the webhook process serving the API group groupName.
 // It checks its flags and groupName before the server starts.
 func newApp(ctx context.Context, groupName string) *app {
@@ -85,6 +102,7 @@ func newApp(ctx context.Context, groupName string) *app {
 	cmd := server.NewCommandStartWebhookServer(ctx, groupName, &a.solver)
 	cmd.Use = "cert-manager-webhook-dnsgate"
 	cmd.Short = "the cert-manager Webhook: writes DNS-01 challenge values through the DNS Gateway"
+	cmd.Version = fmt.Sprintf("%s (commit %s)", version, commit)
 	cmd.SilenceUsage = true
 	cmd.SilenceErrors = true
 

@@ -27,3 +27,28 @@ data:
   {{- end }}
 ---
 {{- end }}
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1alpha1.{{ .Values.groupName }}
+  {{- if eq .Values.tls.type "cert-manager" }}
+  annotations:
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ include "cert-manager-webhook-dnsgate.fullname" . }}-tls
+  {{- end }}
+spec:
+  group: {{ .Values.groupName | quote }}
+  version: v1alpha1
+  groupPriorityMinimum: 100
+  versionPriority: 100
+  service:
+    name: {{ include "cert-manager-webhook-dnsgate.fullname" . }}
+    namespace: {{ .Release.Namespace }}
+    port: 443
+  insecureSkipTLSVerify: false
+  {{- if eq .Values.tls.type "helm" }}
+  {{- if $current }}
+  caBundle: {{ index $current.data "tls.crt" }}
+  {{- else }}
+  caBundle: {{ $crts.Cert | b64enc | quote }}
+  {{- end }}
+  {{- end }}

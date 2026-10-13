@@ -21,6 +21,8 @@ image:
   # Overrides the image tag whose default is the chart appVersion.
   tag: ""
 
+groupName: acme.dnsgate.link
+
 # -- Args for the container entrypoint
 args: []
 
@@ -42,6 +44,13 @@ tls:
 
   # -- The cluster domain for the Kubernetes cluster.
   clusterDomain: cluster.local
+
+# -- Cert Manager configuration
+certManager:
+  # -- The namespace where cert-manager is installed.
+  namespace: cert-manager
+  # -- The name of the service account used by cert-manager.
+  serviceAccountName: cert-manager
 
 # -- Pods Service Account.
 # ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/

@@ -1,0 +1,35 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "cert-manager-webhook-dnsgate.fullname" . }}:flowcontrol
+  labels:
+    {{- include "cert-manager-webhook-dnsgate.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [flowcontrol.apiserver.k8s.io]
+    resources: [flowschemas, prioritylevelconfigurations]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "cert-manager-webhook-dnsgate.fullname" . }}:domain-solver
+  labels:
+    {{- include "cert-manager-webhook-dnsgate.labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - {{ .Values.groupName | quote }}
+    resources: [dnsgate]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "cert-manager-webhook-dnsgate.fullname" . }}:secrets
+  labels:
+    {{- include "cert-manager-webhook-dnsgate.labels" . | nindent 4 }}
+  namespace: {{ .Values.certManager.namespace }}
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get]
