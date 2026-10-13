@@ -58,6 +58,16 @@ unit: ## Run tests with the race detector
 test: lint unit ## Run lint and unit tests
 
 ############
+
+.PHONY: licenses
+licenses: ## Check licenses
+	go-licenses check ./... --disallowed_types=forbidden,restricted,unknown
+
+.PHONY: conformance
+conformance: ## Conformance
+	docker run --rm -it -v $(PWD):/src -w /src ghcr.io/siderolabs/conform:v0.1.0-alpha.31 enforce
+
+############
 #
 # Helm Abstractions
 #

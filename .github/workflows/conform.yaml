@@ -25,7 +25,7 @@ jobs:
       - name: Checkout main branch
         run: git fetch --no-tags origin main:main
 
-      # - name: Conform action
-      #   uses: talos-systems/conform@cfdb3cce90daece912e6a5cb3f20b2316a78a5bf # v0.1.0-alpha.31
-      #   with:
-      #     token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Conform action
+        uses: talos-systems/conform@cfdb3cce90daece912e6a5cb3f20b2316a78a5bf # v0.1.0-alpha.31
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
