@@ -106,6 +106,19 @@ func TestPresentNamesTheCauseOfAGatewayFailure(t *testing.T) {
 	}
 }
 
+func TestPresentNeverRetriesAFailedGatewayCall(t *testing.T) {
+	for name, tt := range gatewayFailures {
+		t.Run(name, func(t *testing.T) {
+			s, gw := newSolver(tokenSecret("team-a", "dnsgate", map[string]string{"token": "tok-a"}))
+			gw.err = tt.err
+
+			_ = s.Present(challenge(`{"tokenSecretRef":{"name":"dnsgate"}}`))
+
+			checkOneRequest(t, gw, wantPresent("tok-a", "example.com", "_acme-challenge"))
+		})
+	}
+}
+
 func TestAGatewayFailureNeverShowsTheTokenOrTheKey(t *testing.T) {
 	const token = "tok-secret-a"
 
