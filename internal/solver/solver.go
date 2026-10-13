@@ -124,7 +124,7 @@ func newSecrets(cfg *restclient.Config) (corev1client.SecretsGetter, error) {
 func (s *Solver) Present(ch *whapi.ChallengeRequest) error {
 	start := time.Now()
 	err := s.present(ch)
-	s.logCall(ch, "present", err, time.Since(start))
+	s.logCall(ch, actionPresent, err, time.Since(start))
 
 	return err
 }
@@ -168,9 +168,18 @@ func (s *Solver) present(ch *whapi.ChallengeRequest) error {
 	return nil
 }
 
-// logCall logs the outcome of action, a call for ch that took d and
+// action is what a call of the solver does at the Challenge Target, as
+// logged.
+type action string
+
+// The actions of the solver.
+const (
+	actionPresent action = "present"
+)
+
+// logCall logs the outcome of act, a call for ch that took d and
 // ended with err. The line never carries the token or ch.Key.
-func (s *Solver) logCall(ch *whapi.ChallengeRequest, action string, err error, d time.Duration) {
+func (s *Solver) logCall(ch *whapi.ChallengeRequest, act action, err error, d time.Duration) {
 	logger := s.opts.Logger
 	if logger == nil {
 		logger = slog.Default()
@@ -181,13 +190,13 @@ func (s *Solver) logCall(ch *whapi.ChallengeRequest, action string, err error, d
 		level, result = slog.LevelError, err.Error()
 	}
 
-	logger.LogAttrs(context.Background(), level, "challenge "+action,
+	logger.LogAttrs(context.Background(), level, "challenge "+string(act),
 		slog.String("uid", string(ch.UID)),
 		slog.String("namespace", ch.ResourceNamespace),
 		slog.String("dnsName", ch.DNSName),
 		slog.String("challengeTarget", ch.ResolvedFQDN),
 		slog.String("zone", ch.ResolvedZone),
-		slog.String("action", action),
+		slog.String("action", string(act)),
 		slog.String("result", result),
 		slog.Duration("duration", d),
 	)
