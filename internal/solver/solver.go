@@ -122,14 +122,35 @@ func newSecrets(cfg *restclient.Config) (corev1client.SecretsGetter, error) {
 
 // Present adds ch.Key at the Challenge Target.
 func (s *Solver) Present(ch *whapi.ChallengeRequest) error {
+	return s.call(ch, actionPresent, &dnsgatev1.PatchRecordRequest{
+		Ttl: defaultTTL,
+		Add: []*dnsgatev1.RecordValue{{Value: txtValue(ch.Key)}},
+	})
+}
+
+// CleanUp removes ch.Key from the Challenge Target, leaving any other
+// value there alone. Removing a value the RRset does not hold changes
+// nothing, so a retried CleanUp succeeds.
+func (s *Solver) CleanUp(ch *whapi.ChallengeRequest) error {
+	return s.call(ch, actionCleanUp, &dnsgatev1.PatchRecordRequest{
+		Remove: []string{txtValue(ch.Key)},
+	})
+}
+
+// txtValue returns key in TXT presentation form.
+func txtValue(key string) string { return `"` + key + `"` }
+
+// call runs act for ch and logs it: it sends patch, the values to add or
+// remove, to the Gateway at the Challenge Target with the token.
+func (s *Solver) call(ch *whapi.ChallengeRequest, act action, patch *dnsgatev1.PatchRecordRequest) error {
 	start := time.Now()
-	err := s.present(ch)
-	s.logCall(ch, actionPresent, err, time.Since(start))
+	err := s.patch(ch, patch)
+	s.logCall(ch, act, err, time.Since(start))
 
 	return err
 }
 
-func (s *Solver) present(ch *whapi.ChallengeRequest) error {
+func (s *Solver) patch(ch *whapi.ChallengeRequest, patch *dnsgatev1.PatchRecordRequest) error {
 	deps := s.clients.Load()
 	if deps == nil {
 		return errors.New("the webhook is not initialized yet")
@@ -154,15 +175,16 @@ func (s *Solver) present(ch *whapi.ChallengeRequest) error {
 	defer cancel()
 
 	_, err = deps.gateway.PatchRecord(ctx, &dnsgatev1.PatchRecordRequest{
-		Token: token,
-		Zone:  target.zone,
-		Name:  target.name,
-		Type:  "TXT",
-		Ttl:   defaultTTL,
-		Add:   []*dnsgatev1.RecordValue{{Value: `"` + ch.Key + `"`}},
+		Token:  token,
+		Zone:   target.zone,
+		Name:   target.name,
+		Type:   "TXT",
+		Ttl:    patch.GetTtl(),
+		Add:    patch.GetAdd(),
+		Remove: patch.GetRemove(),
 	})
 	if err != nil {
-		return newGatewayFailure(err, defaultTTL)
+		return newGatewayFailure(err, patch.GetTtl())
 	}
 
 	return nil
@@ -175,6 +197,7 @@ type action string
 // The actions of the solver.
 const (
 	actionPresent action = "present"
+	actionCleanUp action = "cleanup"
 )
 
 // logCall logs the outcome of act, a call for ch that took d and
@@ -200,9 +223,4 @@ func (s *Solver) logCall(ch *whapi.ChallengeRequest, act action, err error, d ti
 		slog.String("result", result),
 		slog.Duration("duration", d),
 	)
-}
-
-// CleanUp is not implemented yet.
-func (s *Solver) CleanUp(*whapi.ChallengeRequest) error {
-	return errors.New("CleanUp is not implemented")
 }
