@@ -96,6 +96,16 @@ helm-release: helm-unit ## Package, push and sign the OCI chart
 # Release Abstractions
 #
 
+.PHONY: docs
+docs:
+	helm version
+	yq -i '.appVersion = "$(TAG)"' charts/cert-manager-webhook-dnsgate/Chart.yaml
+	helm template -n cert-manager cert-manager-webhook-dnsgate \
+		--set-string image.tag=$(TAG) \
+		--namespace cert-manager \
+		charts/cert-manager-webhook-dnsgate > docs/deploy/cert-manager-webhook-dnsgate-release.yml
+	helm-docs --sort-values-order=file charts/cert-manager-webhook-dnsgate
+
 release-check: ## Validate GoReleaser configuration
 	goreleaser check
 
