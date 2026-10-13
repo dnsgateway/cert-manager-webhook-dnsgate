@@ -244,3 +244,16 @@ func TestEachCallRefusesANameOutsideTheConfiguredZone(t *testing.T) {
 		}
 	}
 }
+
+func TestEachCallRefusesTheRootAsTheConfiguredZone(t *testing.T) {
+	for callName, sc := range solverCalls {
+		t.Run(callName, func(t *testing.T) {
+			s, gw := newSolver(tokenSecret("team-a", "dnsgate", map[string]string{"token": "tok-a"}))
+
+			err := sc.call(s, sc.challenge(`{"tokenSecretRef":{"name":"dnsgate"},"zone":"."}`))
+
+			checkError(t, err, `invalid solver config: zone "." names no zone`)
+			checkNoRequest(t, gw)
+		})
+	}
+}
