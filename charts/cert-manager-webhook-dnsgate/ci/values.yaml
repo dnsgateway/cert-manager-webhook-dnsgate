@@ -4,6 +4,10 @@ image:
 
 args:
   - --v=4
+  - --log-level=debug
+  - --gateway=dnsgate:443
+  - --gateway-timeout=30s
+  # - --ca-file=/var/run/certs/ca.crt
 
 tls:
   type: "helm"
