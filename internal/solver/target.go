@@ -31,11 +31,10 @@ type target struct {
 	name string
 }
 
-// challengeTarget makes fqdn, the Challenge Target, relative to zone.
-// Both may end in a dot; neither the zone nor the name returned does.
+// challengeTarget makes fqdn, the Challenge Target, relative to zone,
+// which does not end in a dot. fqdn may; the name returned does not.
 func challengeTarget(fqdn, zone string) (target, error) {
 	fqdn = strings.TrimSuffix(fqdn, ".")
-	zone = strings.TrimSuffix(zone, ".")
 
 	if zone == "" || fqdn == "" {
 		return target{}, fmt.Errorf("no Challenge Target or zone in the request: %q in %q", fqdn, zone)

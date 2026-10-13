@@ -24,7 +24,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -140,67 +139,80 @@ func (s *Solver) CleanUp(ch *whapi.ChallengeRequest) error {
 func txtValue(key string) string { return `"` + key + `"` }
 
 // change is what one call of the solver does at the Challenge Target:
-// its action, as logged, and the TXT values it adds, with the config's
-// TTL, or removes.
+// its action, as logged, and the TXT values it adds or removes.
 type change struct {
 	act    action
 	add    []*dnsgatev1.RecordValue
 	remove []string
 }
 
-// call makes c at the Challenge Target of ch and logs it.
+// ttl is the TTL c sends with cfg: the config's TTL when c adds values,
+// none when it only removes them.
+func (c change) ttl(cfg config) uint32 {
+	if len(c.add) == 0 {
+		return 0
+	}
+
+	return cfg.TTL
+}
+
+// call makes c at the Challenge Target of ch and logs it, with the zone
+// it writes in or, when it fails before the config is read, the zone
+// cert-manager resolved.
 func (s *Solver) call(ch *whapi.ChallengeRequest, c change) error {
 	start := time.Now()
-	zone, err := s.patch(ch, c)
+
+	deps, cfg, err := s.accept(ch)
+	zone := cfg.writeZone(ch)
+
+	if err == nil {
+		err = s.patch(deps, ch, cfg, zone, c)
+	}
+
 	s.logCall(ch, c.act, zone, err, time.Since(start))
 
 	return err
 }
 
-// patch makes c at the Challenge Target of ch: it reads the token from
-// the Secret the config of ch names and sends c to the Gateway in one
-// PatchRecord, bounded by the solver's timeout. It returns the zone it
-// writes in, or the zone it had chosen when it failed.
-func (s *Solver) patch(ch *whapi.ChallengeRequest, c change) (string, error) {
-	zone := strings.TrimSuffix(ch.ResolvedZone, ".")
-
+// accept returns the solver's clients and the config of ch, or why the
+// solver cannot take ch.
+func (s *Solver) accept(ch *whapi.ChallengeRequest) (*clients, config, error) {
 	deps := s.clients.Load()
 	if deps == nil {
-		return zone, errors.New("the webhook is not initialized yet")
+		return nil, config{}, errors.New("the webhook is not initialized yet")
 	}
 
 	if ch.Type != dns01 {
-		return zone, errNotDNS01
+		return nil, config{}, errNotDNS01
 	}
 
 	cfg, err := parseConfig(ch.Config)
 	if err != nil {
-		return zone, err
+		return nil, config{}, err
 	}
 
-	if cfg.Zone != "" {
-		zone = cfg.Zone
-	}
+	return deps, cfg, nil
+}
 
+// patch makes c at the Challenge Target of ch in zone: it reads the
+// token from the Secret cfg names and sends c to the Gateway in one
+// PatchRecord, bounded by the solver's timeout.
+func (s *Solver) patch(deps *clients, ch *whapi.ChallengeRequest, cfg config, zone string, c change) error {
 	target, err := challengeTarget(ch.ResolvedFQDN, zone)
 	if err != nil {
-		return zone, err
+		return err
 	}
 
 	if err := checkKey(ch.Key); err != nil {
-		return zone, err
+		return err
 	}
 
 	token, err := readToken(context.Background(), deps.secrets, ch.ResourceNamespace, cfg.TokenSecretRef)
 	if err != nil {
-		return zone, err
+		return err
 	}
 
-	// patch applies the TTL only to the values it adds.
-	var ttl uint32
-	if len(c.add) > 0 {
-		ttl = cfg.TTL
-	}
+	ttl := c.ttl(cfg)
 
 	ctx, cancel := context.WithTimeout(context.Background(), s.opts.Timeout)
 	defer cancel()
@@ -216,10 +228,10 @@ func (s *Solver) patch(ch *whapi.ChallengeRequest, c change) (string, error) {
 		Remove: c.remove,
 	})
 	if err != nil {
-		return zone, newGatewayFailure(err, ttl)
+		return newGatewayFailure(err, ttl)
 	}
 
-	return zone, nil
+	return nil
 }
 
 // action is what a call of the solver does at the Challenge Target, as

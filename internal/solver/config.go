@@ -24,6 +24,7 @@ import (
 	"io"
 	"strings"
 
+	whapi "github.com/cert-manager/cert-manager/pkg/acme/webhook/apis/acme/v1alpha1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
 	dnsgatev1 "github.com/dnsgateway/dnsgate-go/api/dnsgate/v1"
@@ -47,6 +48,17 @@ type config struct {
 	TTL uint32 `json:"ttl"`
 	// Egress is gateway, agent or empty, for the Gateway to choose.
 	Egress egress `json:"egress"`
+}
+
+// writeZone returns the zone a call for ch writes in, without a trailing
+// dot: the configured zone or, without one, the zone cert-manager
+// resolved.
+func (c config) writeZone(ch *whapi.ChallengeRequest) string {
+	if c.Zone != "" {
+		return c.Zone
+	}
+
+	return strings.TrimSuffix(ch.ResolvedZone, ".")
 }
 
 // egress is the Egress a config asks the Gateway for. It decodes from
