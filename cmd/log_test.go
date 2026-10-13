@@ -23,6 +23,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"testing"
 
@@ -86,7 +87,7 @@ func TestLogLevelAppliesToEveryLogLine(t *testing.T) {
 				t.Fatalf("helper: %v\n%s%s", err, out, &stderr)
 			}
 
-			if got := testLines(t, &stderr); !equalStrings(got, want) {
+			if got := testLines(t, &stderr); !slices.Equal(got, want) {
 				t.Errorf("lines logged = %q, want %q", got, want)
 			}
 		})
@@ -114,8 +115,4 @@ func testLines(t *testing.T, out *bytes.Buffer) []string {
 	}
 
 	return msgs
-}
-
-func equalStrings(a, b []string) bool {
-	return strings.Join(a, "\n") == strings.Join(b, "\n")
 }
