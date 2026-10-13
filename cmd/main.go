@@ -83,11 +83,11 @@ func newApp(ctx context.Context, groupName string) *app {
 
 	cmd := server.NewCommandStartWebhookServer(ctx, groupName, &a.solver)
 	cmd.Use = "cert-manager-webhook-dnsgate"
-	cmd.Short = "cert-manager DNS-01 webhook solver that writes challenge values through the DNS Gateway"
+	cmd.Short = "the cert-manager Webhook: writes DNS-01 challenge values through the DNS Gateway"
 	cmd.SilenceUsage = true
 	cmd.SilenceErrors = true
 
-	f := defaultFlags()
+	f := flagsFromEnv()
 	f.addFlags(cmd.Flags())
 
 	cmd.PreRunE = func(cmd *cobra.Command, _ []string) error {

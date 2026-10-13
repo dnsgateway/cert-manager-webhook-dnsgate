@@ -222,7 +222,7 @@ The same caveat as for ACME tokens applies: the shape check on the TXT value run
 
 # Flags
 
-Each flag falls back to an environment variable, then to a default. The Gateway client flags keep the names and environment variables of `dnsgate-cli` and `dnsgate-acme`.
+Each flag falls back to an environment variable, then to a default. An environment variable that is set but empty counts as unset, as Helm renders an unset value empty. The Gateway client flags keep the names and environment variables of `dnsgate-cli` and `dnsgate-acme`.
 
 | Flag | Environment variable | Default | Meaning |
 |---|---|---|---|
@@ -234,7 +234,7 @@ Each flag falls back to an environment variable, then to a default. The Gateway 
 
 The webhook framework adds the usual extension API server flags (`--secure-port`, `--tls-cert-file`, `--tls-private-key-file`, and so on).
 
-The webhook stops at startup when `--gateway` or `GROUP_NAME` is missing, or a `--ca-file` cannot be read.
+The webhook stops at startup when `--gateway` or `GROUP_NAME` is missing, `--gateway` is not a `host:port`, or a `--ca-file` cannot be read.
 
 ---
 

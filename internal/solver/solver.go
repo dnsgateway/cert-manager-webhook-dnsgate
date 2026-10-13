@@ -55,7 +55,8 @@ type Options struct {
 	// Kubernetes config. It is called once, by Initialize. Nil means a
 	// client-go clientset.
 	NewSecrets func(*restclient.Config) (corev1client.SecretsGetter, error)
-	// Timeout bounds the Gateway round trip of one call.
+	// Timeout bounds the Gateway round trip of one call. It starts once
+	// the token Secret has been read, so the read does not count.
 	Timeout time.Duration
 }
 
@@ -117,8 +118,8 @@ func newSecrets(cfg *restclient.Config) (corev1client.SecretsGetter, error) {
 
 // Present adds ch.Key at the Challenge Target.
 func (s *Solver) Present(ch *whapi.ChallengeRequest) error {
-	c := s.clients.Load()
-	if c == nil {
+	deps := s.clients.Load()
+	if deps == nil {
 		return errors.New("the webhook is not initialized yet")
 	}
 
@@ -127,7 +128,12 @@ func (s *Solver) Present(ch *whapi.ChallengeRequest) error {
 		return err
 	}
 
-	tgt, err := challengeTarget(ch.ResolvedFQDN, ch.ResolvedZone)
+	target, err := challengeTarget(ch.ResolvedFQDN, ch.ResolvedZone)
+	if err != nil {
+		return err
+	}
+
+	token, err := readToken(context.Background(), deps.secrets, ch.ResourceNamespace, cfg.TokenSecretRef)
 	if err != nil {
 		return err
 	}
@@ -135,15 +141,10 @@ func (s *Solver) Present(ch *whapi.ChallengeRequest) error {
 	ctx, cancel := context.WithTimeout(context.Background(), s.opts.Timeout)
 	defer cancel()
 
-	token, err := readToken(ctx, c.secrets, ch.ResourceNamespace, cfg.TokenSecretRef)
-	if err != nil {
-		return err
-	}
-
-	_, err = c.gateway.PatchRecord(ctx, &dnsgatev1.PatchRecordRequest{
+	_, err = deps.gateway.PatchRecord(ctx, &dnsgatev1.PatchRecordRequest{
 		Token: token,
-		Zone:  tgt.zone,
-		Name:  tgt.name,
+		Zone:  target.zone,
+		Name:  target.name,
 		Type:  "TXT",
 		Ttl:   defaultTTL,
 		Add:   []*dnsgatev1.RecordValue{{Value: `"` + ch.Key + `"`}},

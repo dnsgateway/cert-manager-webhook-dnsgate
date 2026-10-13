@@ -30,22 +30,24 @@ import (
 // token takes effect on the next challenge. The token is returned
 // unchanged.
 func readToken(ctx context.Context, secrets corev1client.SecretsGetter, namespace string, ref secretRef) (string, error) {
+	name := namespace + "/" + ref.Name
+
 	secret, err := secrets.Secrets(namespace).Get(ctx, ref.Name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
-		return "", fmt.Errorf("secret %s/%s not found", namespace, ref.Name)
+		return "", fmt.Errorf("secret %s not found", name)
 	}
 
 	if err != nil {
-		return "", fmt.Errorf("reading secret %s/%s: %w", namespace, ref.Name, err)
+		return "", fmt.Errorf("reading secret %s: %w", name, err)
 	}
 
 	token, ok := secret.Data[ref.Key]
 	if !ok {
-		return "", fmt.Errorf("secret %s/%s has no key %q", namespace, ref.Name, ref.Key)
+		return "", fmt.Errorf("secret %s has no key %q", name, ref.Key)
 	}
 
 	if len(token) == 0 {
-		return "", fmt.Errorf("secret %s/%s key %q is empty", namespace, ref.Name, ref.Key)
+		return "", fmt.Errorf("secret %s key %q is empty", name, ref.Key)
 	}
 
 	return string(token), nil

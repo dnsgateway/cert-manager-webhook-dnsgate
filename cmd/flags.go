@@ -22,8 +22,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -48,13 +51,13 @@ const (
 	defaultLogLevel       = "info"
 )
 
-// Flags holds the webhook's own flags. Each falls back to an environment
-// variable, then to a default.
-type Flags struct {
-	Gateway        string
-	CAFiles        []string
-	GatewayTimeout time.Duration
-	LogLevel       string
+// flagValues holds the webhook's own flags. Each falls back to an
+// environment variable, then to a default.
+type flagValues struct {
+	gateway        string
+	caFiles        []string
+	gatewayTimeout time.Duration
+	logLevel       string
 
 	// envTimeoutErr is why the timeout in the environment was not taken,
 	// if it was not; it stops startup unless --gateway-timeout replaces it.
@@ -64,83 +67,105 @@ type Flags struct {
 // settings are the checked flags the webhook runs with.
 type settings struct {
 	gateway  string
-	caFiles  []string
 	tls      *tls.Config
 	timeout  time.Duration
 	logLevel slog.Level
 }
 
-// defaultFlags returns the flags resolved from the environment and
-// defaults, before command-line parsing.
-func defaultFlags() *Flags {
-	f := &Flags{
-		Gateway:        os.Getenv(envGateway),
-		CAFiles:        envPathList(envCAFile),
-		GatewayTimeout: defaultGatewayTimeout,
-		LogLevel:       withDefaultEnv(envLogLevel, defaultLogLevel),
+// flagsFromEnv returns the flag values the environment gives or, for a
+// variable that is unset or empty, the defaults. The command line may
+// replace them.
+func flagsFromEnv() *flagValues {
+	f := &flagValues{
+		gateway:        os.Getenv(envGateway),
+		caFiles:        envPathList(envCAFile),
+		gatewayTimeout: defaultGatewayTimeout,
+		logLevel:       withDefaultEnv(envLogLevel, defaultLogLevel),
 	}
 
-	if v, ok := os.LookupEnv(envGatewayTimeout); ok {
+	if v, ok := lookupEnv(envGatewayTimeout); ok {
 		d, err := time.ParseDuration(v)
 		if err != nil {
 			f.envTimeoutErr = fmt.Errorf("invalid %s %q: give a duration such as 20s", envGatewayTimeout, v)
 		}
 
-		f.GatewayTimeout = d
+		f.gatewayTimeout = d
 	}
 
 	return f
 }
 
 // addFlags registers the webhook's own flags.
-func (f *Flags) addFlags(flags *pflag.FlagSet) {
-	flags.StringVarP(&f.Gateway, flagGateway, "", f.Gateway,
+func (f *flagValues) addFlags(flags *pflag.FlagSet) {
+	flags.StringVarP(&f.gateway, flagGateway, "", f.gateway,
 		"Gateway address as host:port; required (env "+envGateway+")")
-	flags.StringArrayVarP(&f.CAFiles, flagCAFile, "", f.CAFiles,
+	flags.StringArrayVarP(&f.caFiles, flagCAFile, "", f.caFiles,
 		"PEM file of the CA certificates that verify the Gateway, instead of the system's; repeat it to trust several (env "+envCAFile+", a path list)")
-	flags.DurationVarP(&f.GatewayTimeout, flagGatewayTimeout, "", f.GatewayTimeout,
+	flags.DurationVarP(&f.gatewayTimeout, flagGatewayTimeout, "", f.gatewayTimeout,
 		"bound on the Gateway round trip of one Present or CleanUp (env "+envGatewayTimeout+")")
-	flags.StringVarP(&f.LogLevel, flagLogLevel, "", f.LogLevel,
+	flags.StringVarP(&f.logLevel, flagLogLevel, "", f.logLevel,
 		"lowest level of the logs written: "+logLevelNames()+" (env "+envLogLevel+")")
 }
 
 // check checks the flags, set on flags, and the API group, and returns the
 // settings they give. It reads the CA files, so that a missing or broken
 // one stops the webhook before it serves.
-func (f *Flags) check(flags *pflag.FlagSet, groupName string) (settings, error) {
+func (f *flagValues) check(flags *pflag.FlagSet, groupName string) (settings, error) {
 	if groupName == "" {
 		return settings{}, errors.New("no API group: set " + envGroupName)
 	}
 
-	if f.Gateway == "" {
+	if f.gateway == "" {
 		return settings{}, errors.New("no Gateway address: set --" + flagGateway + " or " + envGateway)
+	}
+
+	if !validGatewayAddress(f.gateway) {
+		return settings{}, fmt.Errorf("invalid Gateway address %q: give host:port", f.gateway)
 	}
 
 	if f.envTimeoutErr != nil && !flags.Changed(flagGatewayTimeout) {
 		return settings{}, f.envTimeoutErr
 	}
 
-	if f.GatewayTimeout <= 0 {
+	if f.gatewayTimeout <= 0 {
 		return settings{}, errors.New("--" + flagGatewayTimeout + " must be positive")
 	}
 
-	level, err := logLevel(f.LogLevel)
+	level, err := logLevel(f.logLevel)
 	if err != nil {
 		return settings{}, err
 	}
 
-	tlsCfg, err := gatewayTLS(f.CAFiles)
+	tlsCfg, err := gatewayTLS(f.caFiles)
 	if err != nil {
 		return settings{}, err
 	}
 
 	return settings{
-		gateway:  f.Gateway,
-		caFiles:  f.CAFiles,
+		gateway:  f.gateway,
 		tls:      tlsCfg,
-		timeout:  f.GatewayTimeout,
+		timeout:  f.gatewayTimeout,
 		logLevel: level,
 	}, nil
+}
+
+// validGatewayAddress reports whether address is a host:port with a port
+// number that the gRPC client takes as a DNS target, so that a malformed
+// one stops startup instead of failing the first challenge.
+func validGatewayAddress(address string) bool {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil || host == "" {
+		return false
+	}
+
+	if n, err := strconv.ParseUint(port, 10, 16); err != nil || n == 0 {
+		return false
+	}
+
+	// grpc.NewClient parses the address as this URL.
+	_, err = url.Parse("dns:///" + address)
+
+	return err == nil
 }
 
 // gatewayTLS returns the TLS config that verifies the Gateway against the
@@ -204,12 +229,22 @@ func logLevel(name string) (slog.Level, error) {
 	return 0, errors.New(`unknown log level "` + name + `": use ` + logLevelNames())
 }
 
+// withDefaultEnv returns the environment variable key or, when it is
+// unset or empty, def.
 func withDefaultEnv(key, def string) string {
-	if val, ok := os.LookupEnv(key); ok {
+	if val, ok := lookupEnv(key); ok {
 		return val
 	}
 
 	return def
+}
+
+// lookupEnv returns the environment variable key and whether it is set.
+// An empty variable counts as unset, as Helm renders an unset value empty.
+func lookupEnv(key string) (string, bool) {
+	val := os.Getenv(key)
+
+	return val, val != ""
 }
 
 // envPathList returns the paths in the environment variable key, a path
