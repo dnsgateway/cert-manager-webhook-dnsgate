@@ -18,6 +18,9 @@ package solver_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	"google.golang.org/grpc/codes"
@@ -99,6 +102,42 @@ func TestPresentNamesTheCauseOfAGatewayFailure(t *testing.T) {
 			gw.err = tt.err
 
 			checkError(t, s.Present(challenge(`{"tokenSecretRef":{"name":"dnsgate"}}`)), tt.want)
+		})
+	}
+}
+
+func TestAGatewayFailureNeverShowsTheTokenOrTheKey(t *testing.T) {
+	const token = "tok-secret-a"
+
+	// echo is a Gateway failure whose own text carries the request's
+	// token and key.
+	echo := "request token=" + token + " value=" + validKey
+
+	failures := map[string]error{
+		"unauthenticated": gatewayError(codes.Unauthenticated, echo, &dnsgatev1.Error{Category: dnsgatev1.Error_CATEGORY_UNAUTHENTICATED}),
+		"denied by provider": gatewayError(codes.FailedPrecondition, echo,
+			&dnsgatev1.Error{Category: dnsgatev1.Error_CATEGORY_DENIED_BY_PROVIDER, ProviderStatus: 400}),
+		"invalid record":        gatewayError(codes.InvalidArgument, echo, &dnsgatev1.Error{Category: dnsgatev1.Error_CATEGORY_INVALID_RECORD}),
+		"invalid request":       gatewayError(codes.InvalidArgument, echo, &dnsgatev1.Error{Category: dnsgatev1.Error_CATEGORY_INVALID_REQUEST}),
+		"internal":              gatewayError(codes.Internal, echo, &dnsgatev1.Error{Category: dnsgatev1.Error_CATEGORY_INTERNAL}),
+		"unavailable":           gatewayError(codes.Unavailable, echo, nil),
+		"not a gRPC status":     errors.New(echo),
+		"wrapped context error": fmt.Errorf("%s: %w", echo, context.DeadlineExceeded),
+	}
+
+	for name, gwErr := range failures {
+		t.Run(name, func(t *testing.T) {
+			s, gw := newSolver(tokenSecret("team-a", "dnsgate", map[string]string{"token": token}))
+			gw.err = gwErr
+
+			err := s.Present(challenge(`{"tokenSecretRef":{"name":"dnsgate"}}`))
+			if err == nil {
+				t.Fatal("Present = nil, want an error")
+			}
+
+			if msg := err.Error(); strings.Contains(msg, token) || strings.Contains(msg, validKey) {
+				t.Errorf("error %q shows the token or the key", msg)
+			}
 		})
 	}
 }
