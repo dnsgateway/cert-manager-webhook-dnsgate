@@ -106,11 +106,14 @@ docs:
 		charts/cert-manager-webhook-dnsgate > docs/deploy/cert-manager-webhook-dnsgate-release.yml
 	helm-docs --sort-values-order=file charts/cert-manager-webhook-dnsgate
 
+.PHONY: release-check
 release-check: ## Validate GoReleaser configuration
 	goreleaser check
 
+.PHONY: snapshot
 snapshot: ## Build an unpublished release snapshot
 	goreleaser release --snapshot --clean
 
+.PHONY: release
 release: ## Build and publish a release
 	goreleaser release --clean

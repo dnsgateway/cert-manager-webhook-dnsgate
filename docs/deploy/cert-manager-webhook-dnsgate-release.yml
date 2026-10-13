@@ -1,0 +1,387 @@
+---
+# Source: cert-manager-webhook-dnsgate/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cert-manager-webhook-dnsgate
+  labels:
+    helm.sh/chart: cert-manager-webhook-dnsgate-0.0.2
+    app.kubernetes.io/name: cert-manager-webhook-dnsgate
+    app.kubernetes.io/instance: cert-manager-webhook-dnsgate
+    app.kubernetes.io/version: "v0.1.0"
+    app.kubernetes.io/managed-by: Helm
+automountServiceAccountToken: true
+
+---
+# Source: cert-manager-webhook-dnsgate/templates/cluster-role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cert-manager-webhook-dnsgate:flowcontrol
+  labels:
+    helm.sh/chart: cert-manager-webhook-dnsgate-0.0.2
+    app.kubernetes.io/name: cert-manager-webhook-dnsgate
+    app.kubernetes.io/instance: cert-manager-webhook-dnsgate
+    app.kubernetes.io/version: "v0.1.0"
+    app.kubernetes.io/managed-by: Helm
+rules:
+  - apiGroups: [flowcontrol.apiserver.k8s.io]
+    resources: [flowschemas, prioritylevelconfigurations]
+    verbs: [get, list, watch]
+
+---
+# Source: cert-manager-webhook-dnsgate/templates/cluster-role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cert-manager-webhook-dnsgate:domain-solver
+  labels:
+    helm.sh/chart: cert-manager-webhook-dnsgate-0.0.2
+    app.kubernetes.io/name: cert-manager-webhook-dnsgate
+    app.kubernetes.io/instance: cert-manager-webhook-dnsgate
+    app.kubernetes.io/version: "v0.1.0"
+    app.kubernetes.io/managed-by: Helm
+rules:
+  - apiGroups:
+      - "acme.dnsgate.link"
+    resources: [dnsgate]
+    verbs: [create]
+
+---
+# Source: cert-manager-webhook-dnsgate/templates/cluster-role-binding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cert-manager-webhook-dnsgate:auth-delegator
+  labels:
+    helm.sh/chart: cert-manager-webhook-dnsgate-0.0.2
+    app.kubernetes.io/name: cert-manager-webhook-dnsgate
+    app.kubernetes.io/instance: cert-manager-webhook-dnsgate
+    app.kubernetes.io/version: "v0.1.0"
+    app.kubernetes.io/managed-by: Helm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: cert-manager-webhook-dnsgate
+    namespace: cert-manager
+
+---
+# Source: cert-manager-webhook-dnsgate/templates/cluster-role-binding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cert-manager-webhook-dnsgate:flowcontrol
+  labels:
+    helm.sh/chart: cert-manager-webhook-dnsgate-0.0.2
+    app.kubernetes.io/name: cert-manager-webhook-dnsgate
+    app.kubernetes.io/instance: cert-manager-webhook-dnsgate
+    app.kubernetes.io/version: "v0.1.0"
+    app.kubernetes.io/managed-by: Helm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cert-manager-webhook-dnsgate:flowcontrol
+subjects:
+  - kind: ServiceAccount
+    name: cert-manager-webhook-dnsgate
+    namespace: cert-manager
+
+---
+# Source: cert-manager-webhook-dnsgate/templates/cluster-role-binding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cert-manager-webhook-dnsgate:domain-solver
+  labels:
+    helm.sh/chart: cert-manager-webhook-dnsgate-0.0.2
+    app.kubernetes.io/name: cert-manager-webhook-dnsgate
+    app.kubernetes.io/instance: cert-manager-webhook-dnsgate
+    app.kubernetes.io/version: "v0.1.0"
+    app.kubernetes.io/managed-by: Helm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cert-manager-webhook-dnsgate:domain-solver
+subjects:
+  - kind: ServiceAccount
+    name: cert-manager
+    namespace: cert-manager
+
+---
+# Source: cert-manager-webhook-dnsgate/templates/cluster-role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cert-manager-webhook-dnsgate:secrets
+  labels:
+    helm.sh/chart: cert-manager-webhook-dnsgate-0.0.2
+    app.kubernetes.io/name: cert-manager-webhook-dnsgate
+    app.kubernetes.io/instance: cert-manager-webhook-dnsgate
+    app.kubernetes.io/version: "v0.1.0"
+    app.kubernetes.io/managed-by: Helm
+  namespace: cert-manager
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get]
+
+---
+# Source: cert-manager-webhook-dnsgate/templates/cluster-role-binding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cert-manager-webhook-dnsgate:auth-reader
+  labels:
+    helm.sh/chart: cert-manager-webhook-dnsgate-0.0.2
+    app.kubernetes.io/name: cert-manager-webhook-dnsgate
+    app.kubernetes.io/instance: cert-manager-webhook-dnsgate
+    app.kubernetes.io/version: "v0.1.0"
+    app.kubernetes.io/managed-by: Helm
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
+  - kind: ServiceAccount
+    name: cert-manager-webhook-dnsgate
+    namespace: cert-manager
+
+---
+# Source: cert-manager-webhook-dnsgate/templates/cluster-role-binding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cert-manager-webhook-dnsgate:secrets
+  namespace: cert-manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cert-manager-webhook-dnsgate:secrets
+subjects:
+  - kind: ServiceAccount
+    name: cert-manager-webhook-dnsgate
+    namespace: cert-manager
+
+---
+# Source: cert-manager-webhook-dnsgate/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: cert-manager-webhook-dnsgate
+  labels:
+    helm.sh/chart: cert-manager-webhook-dnsgate-0.0.2
+    app.kubernetes.io/name: cert-manager-webhook-dnsgate
+    app.kubernetes.io/instance: cert-manager-webhook-dnsgate
+    app.kubernetes.io/version: "v0.1.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: ClusterIP
+  ipFamilies:
+    - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+    - port: 443
+      targetPort: https
+      protocol: TCP
+      name: https
+  selector:
+    app.kubernetes.io/name: cert-manager-webhook-dnsgate
+    app.kubernetes.io/instance: cert-manager-webhook-dnsgate
+
+---
+# Source: cert-manager-webhook-dnsgate/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cert-manager-webhook-dnsgate
+  labels:
+    helm.sh/chart: cert-manager-webhook-dnsgate-0.0.2
+    app.kubernetes.io/name: cert-manager-webhook-dnsgate
+    app.kubernetes.io/instance: cert-manager-webhook-dnsgate
+    app.kubernetes.io/version: "v0.1.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 1
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cert-manager-webhook-dnsgate
+      app.kubernetes.io/instance: cert-manager-webhook-dnsgate
+  template:
+    metadata:
+      annotations:
+      labels:
+        helm.sh/chart: cert-manager-webhook-dnsgate-0.0.2
+        app.kubernetes.io/name: cert-manager-webhook-dnsgate
+        app.kubernetes.io/instance: cert-manager-webhook-dnsgate
+        app.kubernetes.io/version: "v0.1.0"
+        app.kubernetes.io/managed-by: Helm
+    spec:
+      enableServiceLinks: false
+      serviceAccountName: cert-manager-webhook-dnsgate
+      securityContext:
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 65532
+        runAsUser: 65532
+      containers:
+        - name: cert-manager-webhook-dnsgate
+          securityContext:
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          image: "ghcr.io/dnsgateway/cert-manager-webhook-dnsgate:v0.1.0"
+          imagePullPolicy: IfNotPresent
+          args:
+            - --secure-port=6443
+            - --tls-cert-file=/var/run/certs/tls.crt
+            - --tls-private-key-file=/var/run/certs/tls.key
+          env:
+            - name: GROUP_NAME
+              value: "acme.dnsgate.link"
+          ports:
+            - name: https
+              containerPort: 6443
+              protocol: TCP
+          startupProbe:
+            failureThreshold: 60
+            httpGet:
+              path: /readyz
+              port: https
+              scheme: HTTPS
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            successThreshold: 1
+            timeoutSeconds: 1
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: certs
+              mountPath: /var/run/certs
+              readOnly: false
+      volumes:
+        - name: certs
+          secret:
+            secretName: cert-manager-webhook-dnsgate-tls
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: cert-manager-webhook-dnsgate
+                    app.kubernetes.io/instance: cert-manager-webhook-dnsgate
+                namespaces:
+                  - "cert-manager"
+                topologyKey: kubernetes.io/hostname
+              weight: 1
+
+---
+# Source: cert-manager-webhook-dnsgate/templates/apiservice.yaml
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1alpha1.acme.dnsgate.link
+  annotations:
+    cert-manager.io/inject-ca-from: cert-manager/cert-manager-webhook-dnsgate-tls
+spec:
+  group: "acme.dnsgate.link"
+  version: v1alpha1
+  groupPriorityMinimum: 100
+  versionPriority: 100
+  service:
+    name: cert-manager-webhook-dnsgate
+    namespace: cert-manager
+    port: 443
+  insecureSkipTLSVerify: false
+
+---
+# Source: cert-manager-webhook-dnsgate/templates/certificate.yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: cert-manager-webhook-dnsgate-ca
+  labels:
+    helm.sh/chart: cert-manager-webhook-dnsgate-0.0.2
+    app.kubernetes.io/name: cert-manager-webhook-dnsgate
+    app.kubernetes.io/instance: cert-manager-webhook-dnsgate
+    app.kubernetes.io/version: "v0.1.0"
+    app.kubernetes.io/managed-by: Helm
+  namespace: cert-manager
+spec:
+  secretName: cert-manager-webhook-dnsgate-ca
+  duration: 87600h # 10y
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: cert-manager-webhook-dnsgate
+  commonName: ca.webhook.cert-manager-webhook-dnsgate
+  isCA: true
+  usages:
+    - digital signature
+    - key encipherment
+    - cert sign
+
+---
+# Source: cert-manager-webhook-dnsgate/templates/certificate.yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: cert-manager-webhook-dnsgate-tls
+  labels:
+    helm.sh/chart: cert-manager-webhook-dnsgate-0.0.2
+    app.kubernetes.io/name: cert-manager-webhook-dnsgate
+    app.kubernetes.io/instance: cert-manager-webhook-dnsgate
+    app.kubernetes.io/version: "v0.1.0"
+    app.kubernetes.io/managed-by: Helm
+  namespace: cert-manager
+spec:
+  secretName: cert-manager-webhook-dnsgate-tls
+  duration: 8760h # 1y
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: cert-manager-webhook-dnsgate
+  commonName: cert-manager-webhook-dnsgate
+  dnsNames:
+    - cert-manager-webhook-dnsgate.cert-manager
+    - cert-manager-webhook-dnsgate.cert-manager.svc
+    - cert-manager-webhook-dnsgate.cert-manager.svc.cluster.local
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+    - client auth
+
+---
+# Source: cert-manager-webhook-dnsgate/templates/certificate.yaml
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: cert-manager-webhook-dnsgate
+  labels:
+    helm.sh/chart: cert-manager-webhook-dnsgate-0.0.2
+    app.kubernetes.io/name: cert-manager-webhook-dnsgate
+    app.kubernetes.io/instance: cert-manager-webhook-dnsgate
+    app.kubernetes.io/version: "v0.1.0"
+    app.kubernetes.io/managed-by: Helm
+  namespace: cert-manager
+spec:
+  selfSigned: {}
