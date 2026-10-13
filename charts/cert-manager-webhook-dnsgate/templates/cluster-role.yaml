@@ -28,7 +28,7 @@ metadata:
   name: {{ include "cert-manager-webhook-dnsgate.fullname" . }}:secrets
   labels:
     {{- include "cert-manager-webhook-dnsgate.labels" . | nindent 4 }}
-  namespace: {{ .Values.certManager.namespace }}
+  namespace: {{ default .Values.certManager.namespace .Values.certManager.clusterResourceNamespace }}
 rules:
   - apiGroups: [""]
     resources: [secrets]

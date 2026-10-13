@@ -51,6 +51,9 @@ certManager:
   namespace: cert-manager
   # -- The name of the service account used by cert-manager.
   serviceAccountName: cert-manager
+  # -- Cluster Resource Namespace
+  # Empty defaults to namespace; match cert-manager --cluster-resource-namespace.
+  clusterResourceNamespace: ""
 
 # -- Pods Service Account.
 # ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/
