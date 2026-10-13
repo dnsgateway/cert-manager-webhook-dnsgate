@@ -113,9 +113,13 @@ func newApp(ctx context.Context, groupName string) *app {
 }
 
 // dialGateway returns the process's one Gateway client for the Gateway at
-// address, verified with tlsCfg. It does not connect yet.
+// address, verified with tlsCfg. It does not connect yet. It never
+// retries a failed call, even if the Gateway's service config asks it
+// to: cert-manager retries the challenge.
 func dialGateway(address string, tlsCfg *tls.Config) (*client.Client, error) {
-	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
+	conn, err := grpc.NewClient(address,
+		grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)),
+		grpc.WithDisableRetry())
 	if err != nil {
 		return nil, fmt.Errorf("connecting to the Gateway: %w", err)
 	}
