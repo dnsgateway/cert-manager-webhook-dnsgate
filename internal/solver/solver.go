@@ -23,6 +23,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync/atomic"
 	"time"
 
@@ -58,6 +59,9 @@ type Options struct {
 	// Timeout bounds the Gateway round trip of one call. It starts once
 	// the token Secret has been read, so the read does not count.
 	Timeout time.Duration
+	// Logger is where the solver logs each call. Nil means slog's default
+	// logger at the time of the call.
+	Logger *slog.Logger
 }
 
 // Solver implements cert-manager's webhook.Solver.
@@ -118,6 +122,14 @@ func newSecrets(cfg *restclient.Config) (corev1client.SecretsGetter, error) {
 
 // Present adds ch.Key at the Challenge Target.
 func (s *Solver) Present(ch *whapi.ChallengeRequest) error {
+	start := time.Now()
+	err := s.present(ch)
+	s.logCall(ch, "present", err, time.Since(start))
+
+	return err
+}
+
+func (s *Solver) present(ch *whapi.ChallengeRequest) error {
 	deps := s.clients.Load()
 	if deps == nil {
 		return errors.New("the webhook is not initialized yet")
@@ -154,6 +166,31 @@ func (s *Solver) Present(ch *whapi.ChallengeRequest) error {
 	}
 
 	return nil
+}
+
+// logCall logs the outcome of action, a call for ch that took d and
+// ended with err. The line never carries the token or ch.Key.
+func (s *Solver) logCall(ch *whapi.ChallengeRequest, action string, err error, d time.Duration) {
+	logger := s.opts.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+
+	level, result := slog.LevelInfo, "ok"
+	if err != nil {
+		level, result = slog.LevelError, err.Error()
+	}
+
+	logger.LogAttrs(context.Background(), level, "challenge "+action,
+		slog.String("uid", string(ch.UID)),
+		slog.String("namespace", ch.ResourceNamespace),
+		slog.String("dnsName", ch.DNSName),
+		slog.String("challengeTarget", ch.ResolvedFQDN),
+		slog.String("zone", ch.ResolvedZone),
+		slog.String("action", action),
+		slog.String("result", result),
+		slog.Duration("duration", d),
+	)
 }
 
 // CleanUp is not implemented yet.
