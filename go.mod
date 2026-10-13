@@ -2,8 +2,6 @@ module github.com/dnsgateway/cert-manager-webhook-dnsgate
 
 go 1.27.0
 
-// k8s.io/* (and kube-openapi, k8s.io/utils, structured-merge-diff) follow the
-// versions in cert-manager's go.mod; bump them only together with cert-manager.
 require (
 	github.com/cert-manager/cert-manager v1.21.2
 	github.com/dnsgateway/dnsgate-go v0.0.0-20261012191026-767f93a9cf23

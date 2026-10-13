@@ -131,17 +131,38 @@ func challenge(config string) *whapi.ChallengeRequest {
 	return ch
 }
 
+// quotedKey is validKey in TXT presentation form, the value the solver
+// adds and removes.
+const quotedKey = `"` + validKey + `"`
+
+// wantRequest is the part of every PatchRecord the solver sends with
+// token, zone and name: the Challenge Target and the token.
+func wantRequest(token, zone, name string) *dnsgatev1.PatchRecordRequest {
+	return &dnsgatev1.PatchRecordRequest{Token: token, Zone: zone, Name: name, Type: "TXT"}
+}
+
 // wantPresent is the PatchRecord that Present sends with token, zone and
 // name.
 func wantPresent(token, zone, name string) *dnsgatev1.PatchRecordRequest {
-	return &dnsgatev1.PatchRecordRequest{
-		Token: token,
-		Zone:  zone,
-		Name:  name,
-		Type:  "TXT",
-		Ttl:   600,
-		Add:   []*dnsgatev1.RecordValue{{Value: `"` + validKey + `"`}},
-	}
+	req := wantRequest(token, zone, name)
+	req.Ttl = 600
+	req.Add = []*dnsgatev1.RecordValue{{Value: quotedKey}}
+
+	return req
+}
+
+// solverCall is one of the two calls cert-manager makes of the solver,
+// with the request it gets for config and the PatchRecord it sends.
+type solverCall struct {
+	call      func(*solver.Solver, *whapi.ChallengeRequest) error
+	challenge func(config string) *whapi.ChallengeRequest
+	want      func(token, zone, name string) *dnsgatev1.PatchRecordRequest
+}
+
+// solverCalls are Present and CleanUp, for what the two do alike.
+var solverCalls = map[string]solverCall{
+	"Present": {call: (*solver.Solver).Present, challenge: challenge, want: wantPresent},
+	"CleanUp": {call: (*solver.Solver).CleanUp, challenge: cleanUpChallenge, want: wantCleanUp},
 }
 
 // checkOneRequest fails t unless gw received exactly want.
@@ -265,7 +286,7 @@ func TestTheGatewayTimeoutDoesNotIncludeTheSecretRead(t *testing.T) {
 	checkOneRequest(t, gw, wantPresent("tok-a", "example.com", "_acme-challenge"))
 }
 
-func TestPresentWritesTheChallengeTargetRelativeToTheResolvedZone(t *testing.T) {
+func TestEachCallWritesTheChallengeTargetRelativeToTheResolvedZone(t *testing.T) {
 	tests := map[string]struct {
 		fqdn, zone string
 		wantZone   string
@@ -289,19 +310,21 @@ func TestPresentWritesTheChallengeTargetRelativeToTheResolvedZone(t *testing.T) 
 		},
 	}
 
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			s, gw := newSolver(tokenSecret("team-a", "dnsgate", map[string]string{"token": "tok-a"}))
+	for callName, sc := range solverCalls {
+		for name, tt := range tests {
+			t.Run(callName+"/"+name, func(t *testing.T) {
+				s, gw := newSolver(tokenSecret("team-a", "dnsgate", map[string]string{"token": "tok-a"}))
 
-			ch := challenge(`{"tokenSecretRef":{"name":"dnsgate"}}`)
-			ch.ResolvedFQDN, ch.ResolvedZone = tt.fqdn, tt.zone
+				ch := sc.challenge(`{"tokenSecretRef":{"name":"dnsgate"}}`)
+				ch.ResolvedFQDN, ch.ResolvedZone = tt.fqdn, tt.zone
 
-			if err := s.Present(ch); err != nil {
-				t.Fatalf("Present: %v", err)
-			}
+				if err := sc.call(s, ch); err != nil {
+					t.Fatalf("%s: %v", callName, err)
+				}
 
-			checkOneRequest(t, gw, wantPresent("tok-a", tt.wantZone, tt.wantName))
-		})
+				checkOneRequest(t, gw, sc.want("tok-a", tt.wantZone, tt.wantName))
+			})
+		}
 	}
 }
 
@@ -405,7 +428,7 @@ func checkError(t *testing.T, err error, want string) {
 	}
 }
 
-func TestPresentReadsTheSecretFromTheResourceNamespaceOnly(t *testing.T) {
+func TestEachCallReadsTheSecretFromTheResourceNamespaceOnly(t *testing.T) {
 	secrets := []runtime.Object{
 		tokenSecret("team-a", "dnsgate", map[string]string{"token": "tok-team-a"}),
 		tokenSecret("team-b", "dnsgate", map[string]string{"token": "tok-team-b"}),
@@ -421,19 +444,21 @@ func TestPresentReadsTheSecretFromTheResourceNamespaceOnly(t *testing.T) {
 		"ClusterIssuer":    {resourceNamespace: "cert-manager", want: "tok-cluster"},
 	}
 
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			s, gw := newSolver(secrets...)
+	for callName, sc := range solverCalls {
+		for name, tt := range tests {
+			t.Run(callName+"/"+name, func(t *testing.T) {
+				s, gw := newSolver(secrets...)
 
-			ch := challenge(`{"tokenSecretRef":{"name":"dnsgate"}}`)
-			ch.ResourceNamespace = tt.resourceNamespace
+				ch := sc.challenge(`{"tokenSecretRef":{"name":"dnsgate"}}`)
+				ch.ResourceNamespace = tt.resourceNamespace
 
-			if err := s.Present(ch); err != nil {
-				t.Fatalf("Present: %v", err)
-			}
+				if err := sc.call(s, ch); err != nil {
+					t.Fatalf("%s: %v", callName, err)
+				}
 
-			checkOneRequest(t, gw, wantPresent(tt.want, "example.com", "_acme-challenge"))
-		})
+				checkOneRequest(t, gw, sc.want(tt.want, "example.com", "_acme-challenge"))
+			})
+		}
 	}
 }
 
@@ -448,12 +473,17 @@ func TestPresentNeverUsesASecretInAnotherNamespace(t *testing.T) {
 	checkNoRequest(t, gw)
 }
 
-func TestPresentRefusesAMissingOrEmptyToken(t *testing.T) {
+func TestEachCallRefusesAMissingOrEmptyToken(t *testing.T) {
 	tests := map[string]struct {
 		secret *corev1.Secret
 		config string
 		want   string
 	}{
+		"secret only in another namespace": {
+			secret: tokenSecret("team-b", "dnsgate", map[string]string{"token": "tok"}),
+			config: `{"tokenSecretRef":{"name":"dnsgate"}}`,
+			want:   "secret team-a/dnsgate not found",
+		},
 		"missing secret": {
 			secret: tokenSecret("team-a", "other", map[string]string{"token": "tok"}),
 			config: `{"tokenSecretRef":{"name":"dnsgate"}}`,
@@ -476,13 +506,15 @@ func TestPresentRefusesAMissingOrEmptyToken(t *testing.T) {
 		},
 	}
 
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			s, gw := newSolver(tt.secret)
+	for callName, sc := range solverCalls {
+		for name, tt := range tests {
+			t.Run(callName+"/"+name, func(t *testing.T) {
+				s, gw := newSolver(tt.secret)
 
-			checkError(t, s.Present(challenge(tt.config)), tt.want)
-			checkNoRequest(t, gw)
-		})
+				checkError(t, sc.call(s, sc.challenge(tt.config)), tt.want)
+				checkNoRequest(t, gw)
+			})
+		}
 	}
 }
 
