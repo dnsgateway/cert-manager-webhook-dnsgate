@@ -162,7 +162,7 @@ func (s *Solver) present(ch *whapi.ChallengeRequest) error {
 		Add:   []*dnsgatev1.RecordValue{{Value: `"` + ch.Key + `"`}},
 	})
 	if err != nil {
-		return gatewayFailed(err, defaultTTL)
+		return newGatewayFailure(err, defaultTTL)
 	}
 
 	return nil
