@@ -21,8 +21,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode"
 
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	dnsgatev1 "github.com/dnsgateway/dnsgate-go/api/dnsgate/v1"
@@ -42,39 +42,45 @@ func (e *gatewayFailure) Error() string { return e.msg }
 
 func (e *gatewayFailure) Unwrap() error { return e.err }
 
-// gatewayFailed returns the error for err, the error a Gateway call sent
-// with ttl ended with. It goes by the Gateway's error category and, when
-// there is none, as for a failed connection or a deadline, by the gRPC
-// code.
-func gatewayFailed(err error, ttl uint32) error {
-	st := gatewayStatus(err)
-
-	detail := dnsgatev1.ErrorDetail(st)
-	if detail == nil {
-		return &gatewayFailure{msg: "the Gateway call failed: " + codeName(st.Code()), err: err}
-	}
-
-	var msg string
-
-	switch c := detail.GetCategory(); c {
-	case dnsgatev1.Error_CATEGORY_UNAUTHENTICATED:
-		msg = "the Gateway refused the token"
-	case dnsgatev1.Error_CATEGORY_PERMISSION_DENIED:
-		msg = st.Message()
-	case dnsgatev1.Error_CATEGORY_DENIED_BY_PROVIDER:
-		msg = fmt.Sprintf("the Provider refused the request: %d", detail.GetProviderStatus())
-	case dnsgatev1.Error_CATEGORY_INVALID_RECORD:
-		msg = fmt.Sprintf("the Gateway refused TTL %d: check ttl against the Provider's range", ttl)
-	default:
-		msg = "the Gateway call failed: " + strings.ReplaceAll(c.Name(), "_", " ")
-	}
-
-	return &gatewayFailure{msg: msg, err: err}
+// newGatewayFailure returns the error for err, the error a Gateway call
+// sent with ttl ended with.
+func newGatewayFailure(err error, ttl uint32) error {
+	return &gatewayFailure{msg: failureMessage(callStatus(err), ttl), err: err}
 }
 
-// gatewayStatus returns the gRPC status of err. A context error that
-// ended the call before the Gateway answered maps to its gRPC code.
-func gatewayStatus(err error) *status.Status {
+// failureMessage returns the message for a Gateway call sent with ttl
+// that ended with st. It goes by the Gateway's error category and, when
+// there is none, as for a failed connection or a deadline, by the gRPC
+// code.
+func failureMessage(st *status.Status, ttl uint32) string {
+	var cause string
+
+	switch detail := dnsgatev1.ErrorDetail(st); detail.GetCategory() {
+	case dnsgatev1.Error_CATEGORY_UNAUTHENTICATED:
+		return "the Gateway refused the token"
+	case dnsgatev1.Error_CATEGORY_PERMISSION_DENIED:
+		return st.Message()
+	case dnsgatev1.Error_CATEGORY_DENIED_BY_PROVIDER:
+		if ps := detail.GetProviderStatus(); ps != 0 {
+			return fmt.Sprintf("the Provider refused the request: %d", ps)
+		}
+
+		return "the Provider refused the request"
+	case dnsgatev1.Error_CATEGORY_INVALID_RECORD:
+		return fmt.Sprintf("the Gateway refused TTL %d: check ttl against the Provider's range", ttl)
+	default:
+		cause = st.Code().String()
+		if detail != nil {
+			cause = detail.GetCategory().Name()
+		}
+	}
+
+	return "the Gateway call failed: " + words(cause)
+}
+
+// callStatus returns the gRPC status of err. A context error that ended
+// the call before the Gateway answered maps to its gRPC code.
+func callStatus(err error) *status.Status {
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 		return status.FromContextError(err)
 	}
@@ -82,18 +88,24 @@ func gatewayStatus(err error) *status.Status {
 	return status.Convert(err)
 }
 
-// codeName returns code in lower case with spaces, such as "deadline
-// exceeded".
-func codeName(code codes.Code) string {
+// words returns name, a CamelCase name such as "DeadlineExceeded" or an
+// upper-case one such as "RATE_LIMITED", as lower-case words separated by
+// spaces: "deadline exceeded", "rate limited".
+func words(name string) string {
 	var b strings.Builder
 
-	for i, r := range code.String() {
-		if i > 0 && r >= 'A' && r <= 'Z' {
+	prev := rune(0)
+	for _, r := range name {
+		switch {
+		case r == '_':
+			r = ' '
+		case unicode.IsUpper(r) && unicode.IsLower(prev):
 			b.WriteByte(' ')
 		}
 
-		b.WriteRune(r)
+		b.WriteRune(unicode.ToLower(r))
+		prev = r
 	}
 
-	return strings.ToLower(b.String())
+	return b.String()
 }

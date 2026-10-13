@@ -85,7 +85,7 @@ func TestPresentLogsTheChallengeAndTheOutcome(t *testing.T) {
 			wantResult: "ok",
 		},
 		"Gateway failure": {
-			gwErr:      gatewayError(codes.Unavailable, "connection refused", nil),
+			gwErr:      statusError(codes.Unavailable, "connection refused", nil),
 			wantLevel:  "ERROR",
 			wantResult: "the Gateway call failed: unavailable",
 		},
