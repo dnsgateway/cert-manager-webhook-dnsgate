@@ -47,6 +47,7 @@ const (
 )
 
 const (
+	defaultGroupName      = "acme.dnsgate.link"
 	defaultGatewayTimeout = 20 * time.Second
 	defaultLogLevel       = "info"
 )

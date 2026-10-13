@@ -68,7 +68,7 @@ spec:
       - dns01:
           cnameStrategy: Follow          # optional, for CNAME delegation
           webhook:
-            groupName: acme.dnsgate.example
+            groupName: acme.dnsgate.link
             solverName: dnsgate
             config:
               tokenSecretRef:
@@ -230,11 +230,11 @@ Each flag falls back to an environment variable, then to a default. An environme
 | `--ca-file` | `DNSGATE_CA_FILE` | the system's CAs | CA certificates that verify the Gateway (repeatable) |
 | `--gateway-timeout` | `DNSGATE_GATEWAY_TIMEOUT` | `20s` | Bound on the Gateway round trip of one `Present` or `CleanUp` |
 | `--log-level` | `DNSGATE_WEBHOOK_LOG_LEVEL` | `info` | Log level |
-| `GROUP_NAME` | `GROUP_NAME` | required | The API group cert-manager calls; set by the Helm chart |
+| `GROUP_NAME` | `GROUP_NAME` | `acme.dnsgate.link` | The API group cert-manager calls; set by the Helm chart |
 
 The webhook framework adds the usual extension API server flags (`--secure-port`, `--tls-cert-file`, `--tls-private-key-file`, and so on).
 
-The webhook stops at startup when `--gateway` or `GROUP_NAME` is missing, `--gateway` is not a `host:port`, or a `--ca-file` cannot be read.
+The webhook stops at startup when `--gateway` is missing, `--gateway` is not a `host:port`, or a `--ca-file` cannot be read.
 
 ---
 

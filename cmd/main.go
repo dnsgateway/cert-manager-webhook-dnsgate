@@ -46,7 +46,7 @@ func main() {
 	logs.InitLogs()
 	defer logs.FlushLogs()
 
-	a := newApp(ctx, os.Getenv(envGroupName))
+	a := newApp(ctx, withDefaultEnv(envGroupName, defaultGroupName))
 	if err := a.cmd.ExecuteContext(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		logs.FlushLogs()
