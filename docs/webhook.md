@@ -228,7 +228,7 @@ Each flag falls back to an environment variable, then to a default. An environme
 |---|---|---|---|
 | `--gateway` | `DNSGATE_GATEWAY` | required | Gateway address as `host:port` |
 | `--ca-file` | `DNSGATE_CA_FILE` | the system's CAs | CA certificates that verify the Gateway (repeatable) |
-| `--gateway-timeout` | `DNSGATE_GATEWAY_TIMEOUT` | `20s` | Bound on the Gateway round trip of one `Present` or `CleanUp` |
+| `--gateway-timeout` | `DNSGATE_GATEWAY_TIMEOUT` | `20s` | Bound on the Gateway round trip of one `Present` or `CleanUp`, including the wait for the lock of its Challenge Target |
 | `--log-level` | `DNSGATE_WEBHOOK_LOG_LEVEL` | `info` | Lowest level written: `error`, `warn`, `info` or `debug`; applies to the framework's klog lines too, but `warn` filters only the solver's own warnings (see below), and `debug` turns klog's `-v` up to 4 unless `-v` is given |
 | `GROUP_NAME` | `GROUP_NAME` | `acme.dnsgate.link` | The API group cert-manager calls; set by the Helm chart |
 
@@ -255,6 +255,7 @@ cert-manager shows a solver's error in the Challenge's status and retries with b
 | Invalid record: TTL out of range | `the Gateway refused TTL 30: check ttl against the Provider's range` | after a fix |
 | Conflict: the RRset changed at the Provider during the write | `the Gateway call failed: conflict` | yes |
 | Rate limited, Provider failure, Gateway unreachable or timed out | `the Gateway call failed: <category>` | yes |
+| Another call held the Challenge Target for the whole timeout | `timed out after 20s waiting for another call at _acme-challenge.www.example.com` | yes |
 
 The Gateway's error messages never quote the token, so they may be passed on. The Challenge's status is readable by anyone who can read Challenges in the namespace, so nothing else from the request goes into it.
 
