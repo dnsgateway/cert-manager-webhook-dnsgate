@@ -232,7 +232,7 @@ Each flag falls back to an environment variable, then to a default. An environme
 | `--log-level` | `DNSGATE_WEBHOOK_LOG_LEVEL` | `info` | Lowest level written: `error`, `warn`, `info` or `debug`; applies to the framework's klog lines too, but `warn` filters only the solver's own warnings (see below), and `debug` turns klog's `-v` up to 4 unless `-v` is given |
 | `GROUP_NAME` | `GROUP_NAME` | `acme.dnsgate.link` | The API group cert-manager calls; set by the Helm chart |
 
-The webhook framework adds the usual extension API server flags (`--secure-port`, `--tls-cert-file`, `--tls-private-key-file`, and so on) and klog's logging flags. The webhook's own `--logging-format`, `dnsgate`, is the default: JSON lines on stderr at `--log-level` and above, for the webhook's lines and the framework's alike. `--log-level warn` filters only the solver's own warnings: klog hands its warnings to the logger as info lines, with nothing that marks them as warnings, so `warn` drops the framework's warnings along with its info lines, and `info` shows them as info lines. With `--logging-format=text` or `json`, klog's own format writes every line, and `--log-level` only turns the verbosity up for `debug`.
+The webhook framework adds the usual extension API server flags (`--secure-port`, `--tls-cert-file`, `--tls-private-key-file`, and so on) and klog's logging flags. The webhook's own `--logging-format`, `dnsgate`, is the default: JSON lines on stderr at `--log-level` and above, for the webhook's lines and the framework's alike. `--log-level warn` filters only the solver's own warnings: klog hands its warnings to the logger as info lines, with nothing that marks them as warnings, so `warn` drops the framework's warnings along with its info lines, and `info` shows them as info lines. ([ADR 0005](adr/0005-own-log-format-is-the-default.md)) With `--logging-format=text` or `json`, klog's own format writes every line, and `--log-level` only turns the verbosity up for `debug`.
 
 The webhook stops at startup when `--gateway` is missing, `--gateway` is not a `host:port`, or a `--ca-file` cannot be read.
 
@@ -336,3 +336,4 @@ There are no integration tests against an in-process Gateway: none can be starte
 - [ADR 0002](adr/0002-zone-from-cert-manager-not-token.md): The zone comes from the solver config or cert-manager, never from the token.
 - [ADR 0003](adr/0003-gateway-address-is-deployment-wide.md): The Gateway address and CA are deployment-wide.
 - [ADR 0004](adr/0004-lock-per-challenge-target-single-replica.md): A lock per Challenge Target, with a single replica.
+- [ADR 0005](adr/0005-own-log-format-is-the-default.md): The webhook's own log format is the default `--logging-format`.
