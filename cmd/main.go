@@ -109,7 +109,8 @@ func newApp(ctx context.Context, groupName string) *app {
 		}
 
 		a.solver.Solver = solver.New(solver.Options{
-			NewGateway: func() (solver.Gateway, error) { return dialGateway(st.gateway, st.tls) },
+			// The zero EgressAgent resolves and dials with the defaults.
+			NewGateway: func() (solver.Gateway, error) { return dialGateway(st.gateway, st.tls, client.EgressAgent{}) },
 			Timeout:    st.timeout,
 		})
 
@@ -122,10 +123,12 @@ func newApp(ctx context.Context, groupName string) *app {
 }
 
 // dialGateway returns the process's one Gateway client for the Gateway at
-// address, verified with tlsCfg. It does not connect yet. It never
+// address, verified with tlsCfg. It does not connect yet. It acts as
+// Egress Agent through agent for every call the Gateway sends through
+// Agent Egress, so that any cert-manager Issuer may ask for it. It never
 // retries a failed call, even if the Gateway's service config asks it
 // to: cert-manager retries the challenge.
-func dialGateway(address string, tlsCfg *tls.Config) (*client.Client, error) {
+func dialGateway(address string, tlsCfg *tls.Config, agent client.EgressAgent) (*client.Client, error) {
 	conn, err := grpc.NewClient(address,
 		grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)),
 		grpc.WithDisableRetry())
@@ -133,5 +136,5 @@ func dialGateway(address string, tlsCfg *tls.Config) (*client.Client, error) {
 		return nil, fmt.Errorf("connecting to the Gateway: %w", err)
 	}
 
-	return client.New(conn), nil
+	return client.New(conn, client.WithEgressAgent(agent)), nil
 }
