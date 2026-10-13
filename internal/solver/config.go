@@ -75,8 +75,7 @@ func parseConfig(raw *apiextensionsv1.JSON) (config, error) {
 // decodeError says why the config did not decode, naming the field at
 // fault rather than the Go types behind it.
 func decodeError(err error) string {
-	var typeErr *json.UnmarshalTypeError
-	if errors.As(err, &typeErr) {
+	if typeErr, ok := errors.AsType[*json.UnmarshalTypeError](err); ok {
 		if typeErr.Field == "" {
 			return "not a JSON object"
 		}
