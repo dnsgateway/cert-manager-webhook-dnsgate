@@ -53,6 +53,9 @@ var logOutput struct {
 // logFormat is the webhook's log format. The cert-manager framework logs
 // through klog, and the server points both klog and slog's default
 // logger at the logger it creates, so --log-level applies to every line.
+// klog hands its warnings to the logger as info lines, with no mark of
+// their severity (its only other channel, the formatted klog buffer,
+// drops the V level), so they are written, and filtered, as info.
 type logFormat struct{}
 
 // Create returns the logger writing JSON lines to logOutput.
