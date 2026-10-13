@@ -244,6 +244,7 @@ cert-manager shows a solver's error in the Challenge's status and retries with b
 
 | Cause | Error message (example) | Retry helps |
 |---|---|---|
+| Challenge not DNS-01 | `the challenge is not dns-01` | no |
 | Config invalid | `invalid solver config: unknown field "tokenSecretRefs"` | no |
 | Name not in the configured zone | `_acme-challenge.www.example.org is not in zone example.com` | no |
 | Secret or key missing | `secret cert-manager/dnsgate-acme-token has no key "token"` | after a fix |
