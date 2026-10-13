@@ -19,6 +19,7 @@ package solver_test
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"sync"
 	"testing"
@@ -100,6 +101,7 @@ func newSolverWithClientset(objects ...runtime.Object) (*solver.Solver, *fakeGat
 		NewSecrets: func(*restclient.Config) (corev1client.SecretsGetter, error) { return clientset.CoreV1(), nil },
 		NewGateway: func() (solver.Gateway, error) { return gw, nil },
 		Timeout:    5 * time.Second,
+		Logger:     slog.New(slog.DiscardHandler),
 	})
 
 	if err := s.Initialize(&restclient.Config{}, nil); err != nil {
