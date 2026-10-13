@@ -33,6 +33,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	restclient "k8s.io/client-go/rest"
+	k8stesting "k8s.io/client-go/testing"
 
 	dnsgatev1 "github.com/dnsgateway/dnsgate-go/api/dnsgate/v1"
 
@@ -44,20 +45,25 @@ import (
 const validKey = "LoqXcYV8q5ONbJQxbmR7SCTNo3tiAXDfowyjxAjEuX0"
 
 // fakeGateway records every PatchRecord request it receives.
-// It fails each with err, when set.
+// It fails each with err, when set, and, as a real client does, with the
+// context's error once the context is done.
 type fakeGateway struct {
 	mu   sync.Mutex
 	reqs []*dnsgatev1.PatchRecordRequest
 	err  error
 }
 
-func (g *fakeGateway) PatchRecord(_ context.Context, req *dnsgatev1.PatchRecordRequest) (*dnsgatev1.PatchRecordResponse, error) {
+func (g *fakeGateway) PatchRecord(ctx context.Context, req *dnsgatev1.PatchRecordRequest) (*dnsgatev1.PatchRecordResponse, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
 	g.reqs = append(g.reqs, proto.CloneOf(req))
 	if g.err != nil {
 		return nil, g.err
+	}
+
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	return &dnsgatev1.PatchRecordResponse{}, nil
@@ -226,6 +232,35 @@ func TestPresentReadsTheSecretOnEveryCall(t *testing.T) {
 	if got := reqs[1].GetToken(); got != "tok-new" {
 		t.Errorf("token after rotation = %q, want tok-new", got)
 	}
+}
+
+func TestTheGatewayTimeoutDoesNotIncludeTheSecretRead(t *testing.T) {
+	gw := &fakeGateway{}
+	clientset := fake.NewClientset(tokenSecret("team-a", "dnsgate", map[string]string{"token": "tok-a"}))
+
+	const timeout = 50 * time.Millisecond
+
+	// The Secret read takes longer than the whole Gateway timeout.
+	clientset.PrependReactor("get", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
+		time.Sleep(2 * timeout)
+
+		return false, nil, nil
+	})
+
+	s := solver.New(solver.Options{
+		NewSecrets: func(*restclient.Config) (corev1client.SecretsGetter, error) { return clientset.CoreV1(), nil },
+		NewGateway: func() (solver.Gateway, error) { return gw, nil },
+		Timeout:    timeout,
+	})
+	if err := s.Initialize(&restclient.Config{}, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.Present(challenge(`{"tokenSecretRef":{"name":"dnsgate"}}`)); err != nil {
+		t.Fatalf("Present: %v", err)
+	}
+
+	checkOneRequest(t, gw, wantPresent("tok-a", "example.com", "_acme-challenge"))
 }
 
 func TestPresentWritesTheChallengeTargetRelativeToTheResolvedZone(t *testing.T) {

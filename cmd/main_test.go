@@ -26,7 +26,6 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -116,6 +115,21 @@ func TestStartupFailsOnMissingOrBadSettings(t *testing.T) {
 			groupName: "acme.dnsgate.example",
 			want:      "no Gateway address: set --gateway or DNSGATE_GATEWAY",
 		},
+		"--gateway without a port": {
+			groupName: "acme.dnsgate.example",
+			args:      []string{"--gateway", "gateway.example.com"},
+			want:      `invalid Gateway address "gateway.example.com": give host:port`,
+		},
+		"--gateway with a port that is not a number": {
+			groupName: "acme.dnsgate.example",
+			args:      []string{"--gateway", "gateway.example.com:https"},
+			want:      `invalid Gateway address "gateway.example.com:https": give host:port`,
+		},
+		"--gateway the gRPC client refuses": {
+			groupName: "acme.dnsgate.example",
+			args:      []string{"--gateway", "%zz:443"},
+			want:      `invalid Gateway address "%zz:443": give host:port`,
+		},
 		"unreadable --ca-file": {
 			groupName: "acme.dnsgate.example",
 			args:      []string{"--gateway", "gateway.example.com:443", "--ca-file", missing},
@@ -193,8 +207,32 @@ func TestStartupTakesSettingsFromTheEnvironment(t *testing.T) {
 		t.Fatalf("startup: %v", err)
 	}
 
-	want := settings{gateway: "env.example.com:443", caFiles: []string{ca1, ca2}, timeout: 7 * time.Second, logLevel: slog.LevelDebug}
+	want := settings{gateway: "env.example.com:443", timeout: 7 * time.Second, logLevel: slog.LevelDebug}
+	checkSettings(t, got, want, ca1, ca2)
+}
+
+func TestStartupTreatsAnEmptyEnvironmentVariableAsUnset(t *testing.T) {
+	clearEnv(t)
+
+	// Helm renders an unset value as an empty one.
+	for _, key := range envVars {
+		t.Setenv(key, "")
+	}
+
+	got, err := startUp(t, "acme.dnsgate.example", "--gateway", "gateway.example.com:443")
+	if err != nil {
+		t.Fatalf("startup: %v", err)
+	}
+
+	want := settings{gateway: "gateway.example.com:443", timeout: 20 * time.Second, logLevel: slog.LevelInfo}
 	checkSettings(t, got, want)
+
+	_, err = startUp(t, "acme.dnsgate.example")
+
+	wantErr := "no Gateway address: set --gateway or DNSGATE_GATEWAY"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("startup error without a Gateway = %v, want %q", err, wantErr)
+	}
 }
 
 func TestStartupFlagsReplaceTheEnvironment(t *testing.T) {
@@ -216,19 +254,18 @@ func TestStartupFlagsReplaceTheEnvironment(t *testing.T) {
 		t.Fatalf("startup: %v", err)
 	}
 
-	want := settings{gateway: "flag.example.com:443", caFiles: []string{flagCA1, flagCA2}, timeout: 3 * time.Second, logLevel: slog.LevelWarn}
-	checkSettings(t, got, want)
+	want := settings{gateway: "flag.example.com:443", timeout: 3 * time.Second, logLevel: slog.LevelWarn}
+	checkSettings(t, got, want, flagCA1, flagCA2)
 }
 
-func checkSettings(t *testing.T, got, want settings) {
+// checkSettings fails t unless got is want, with a TLS config that
+// verifies the Gateway against the certificates in caFiles or, without
+// one, the system's.
+func checkSettings(t *testing.T, got, want settings, caFiles ...string) {
 	t.Helper()
 
 	if got.gateway != want.gateway {
 		t.Errorf("gateway = %q, want %q", got.gateway, want.gateway)
-	}
-
-	if !slices.Equal(got.caFiles, want.caFiles) {
-		t.Errorf("CA files = %q, want %q", got.caFiles, want.caFiles)
 	}
 
 	if got.timeout != want.timeout {
@@ -247,7 +284,26 @@ func checkSettings(t *testing.T, got, want settings) {
 		t.Error("TLS to the Gateway skips verification")
 	}
 
-	if (got.tls.RootCAs != nil) != (len(want.caFiles) > 0) {
-		t.Errorf("TLS root CAs set = %v, want %v", got.tls.RootCAs != nil, len(want.caFiles) > 0)
+	if len(caFiles) == 0 {
+		if got.tls.RootCAs != nil {
+			t.Error("TLS root CAs set, want the system's")
+		}
+
+		return
+	}
+
+	wantPool := x509.NewCertPool()
+
+	for _, file := range caFiles {
+		pem, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		wantPool.AppendCertsFromPEM(pem)
+	}
+
+	if !got.tls.RootCAs.Equal(wantPool) {
+		t.Errorf("TLS root CAs are not the certificates of %q", caFiles)
 	}
 }
