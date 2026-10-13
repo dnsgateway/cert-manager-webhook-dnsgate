@@ -39,9 +39,6 @@ import (
 // Name is the solver name a cert-manager Issuer gives as solverName.
 const Name = "dnsgate"
 
-// defaultTTL is the TTL of the challenge values added.
-const defaultTTL = 600
-
 // Gateway is the part of the dnsgate-go client the solver uses. It is
 // satisfied by *client.Client.
 type Gateway interface {
@@ -125,7 +122,6 @@ func newSecrets(cfg *restclient.Config) (corev1client.SecretsGetter, error) {
 func (s *Solver) Present(ch *whapi.ChallengeRequest) error {
 	return s.call(ch, change{
 		act: actionPresent,
-		ttl: defaultTTL,
 		add: []*dnsgatev1.RecordValue{{Value: txtValue(ch.Key)}},
 	})
 }
@@ -144,11 +140,10 @@ func (s *Solver) CleanUp(ch *whapi.ChallengeRequest) error {
 func txtValue(key string) string { return `"` + key + `"` }
 
 // change is what one call of the solver does at the Challenge Target:
-// its action, as logged, and the TXT values it adds, with their TTL, or
-// removes.
+// its action, as logged, and the TXT values it adds, with the config's
+// TTL, or removes.
 type change struct {
 	act    action
-	ttl    uint32
 	add    []*dnsgatev1.RecordValue
 	remove []string
 }
@@ -193,6 +188,12 @@ func (s *Solver) patch(ch *whapi.ChallengeRequest, c change) (string, error) {
 		return zone, err
 	}
 
+	// patch applies the TTL only to the values it adds.
+	var ttl uint32
+	if len(c.add) > 0 {
+		ttl = cfg.TTL
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), s.opts.Timeout)
 	defer cancel()
 
@@ -201,12 +202,12 @@ func (s *Solver) patch(ch *whapi.ChallengeRequest, c change) (string, error) {
 		Zone:   target.zone,
 		Name:   target.name,
 		Type:   "TXT",
-		Ttl:    c.ttl,
+		Ttl:    ttl,
 		Add:    c.add,
 		Remove: c.remove,
 	})
 	if err != nil {
-		return zone, newGatewayFailure(err, c.ttl)
+		return zone, newGatewayFailure(err, ttl)
 	}
 
 	return zone, nil

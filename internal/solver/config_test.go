@@ -18,6 +18,10 @@ package solver_test
 
 import (
 	"testing"
+
+	"google.golang.org/grpc/codes"
+
+	dnsgatev1 "github.com/dnsgateway/dnsgate-go/api/dnsgate/v1"
 )
 
 func TestEachCallWritesTheChallengeTargetRelativeToTheConfiguredZone(t *testing.T) {
@@ -60,6 +64,85 @@ func TestEachCallWritesTheChallengeTargetRelativeToTheConfiguredZone(t *testing.
 				}
 
 				checkOneRequest(t, gw, sc.want("tok-a", tt.wantZone, tt.wantName))
+			})
+		}
+	}
+}
+
+func TestPresentAddsTheKeyWithTheConfiguredTTL(t *testing.T) {
+	tests := map[string]struct {
+		config string
+		want   uint32
+	}{
+		"ttl given":         {config: `{"tokenSecretRef":{"name":"dnsgate"},"ttl":60}`, want: 60},
+		"ttl defaults":      {config: `{"tokenSecretRef":{"name":"dnsgate"}}`, want: 600},
+		"largest ttl given": {config: `{"tokenSecretRef":{"name":"dnsgate"},"ttl":4294967295}`, want: 4294967295},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			s, gw := newSolver(tokenSecret("team-a", "dnsgate", map[string]string{"token": "tok-a"}))
+
+			if err := s.Present(challenge(tt.config)); err != nil {
+				t.Fatalf("Present: %v", err)
+			}
+
+			want := wantPresent("tok-a", "example.com", "_acme-challenge")
+			want.Ttl = tt.want
+			checkOneRequest(t, gw, want)
+		})
+	}
+}
+
+func TestCleanUpSendsNoTTLWhateverTheConfigSays(t *testing.T) {
+	s, gw := newSolver(tokenSecret("team-a", "dnsgate", map[string]string{"token": "tok-a"}))
+
+	if err := s.CleanUp(cleanUpChallenge(`{"tokenSecretRef":{"name":"dnsgate"},"ttl":60}`)); err != nil {
+		t.Fatalf("CleanUp: %v", err)
+	}
+
+	checkOneRequest(t, gw, wantCleanUp("tok-a", "example.com", "_acme-challenge"))
+}
+
+func TestPresentNamesTheConfiguredTTLWhenTheGatewayRefusesIt(t *testing.T) {
+	s, gw := newSolver(tokenSecret("team-a", "dnsgate", map[string]string{"token": "tok-a"}))
+	gw.err = statusError(codes.InvalidArgument, "ttl out of range",
+		&dnsgatev1.Error{Category: dnsgatev1.Error_CATEGORY_INVALID_RECORD})
+
+	err := s.Present(challenge(`{"tokenSecretRef":{"name":"dnsgate"},"ttl":30}`))
+	checkError(t, err, "the Gateway refused TTL 30: check ttl against the Provider's range")
+}
+
+func TestEachCallRefusesAnInvalidTTL(t *testing.T) {
+	tests := map[string]struct {
+		config string
+		want   string
+	}{
+		"zero": {
+			config: `{"tokenSecretRef":{"name":"dnsgate"},"ttl":0}`,
+			want:   "invalid solver config: ttl must be positive",
+		},
+		"negative": {
+			config: `{"tokenSecretRef":{"name":"dnsgate"},"ttl":-1}`,
+			want:   "invalid solver config: ttl cannot be a JSON number -1",
+		},
+		"too large": {
+			config: `{"tokenSecretRef":{"name":"dnsgate"},"ttl":4294967296}`,
+			want:   "invalid solver config: ttl cannot be a JSON number 4294967296",
+		},
+		"string": {
+			config: `{"tokenSecretRef":{"name":"dnsgate"},"ttl":"600"}`,
+			want:   "invalid solver config: ttl cannot be a JSON string",
+		},
+	}
+
+	for callName, sc := range solverCalls {
+		for name, tt := range tests {
+			t.Run(callName+"/"+name, func(t *testing.T) {
+				s, gw := newSolver(tokenSecret("team-a", "dnsgate", map[string]string{"token": "tok-a"}))
+
+				checkError(t, sc.call(s, sc.challenge(tt.config)), tt.want)
+				checkNoRequest(t, gw)
 			})
 		}
 	}

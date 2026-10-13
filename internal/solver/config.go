@@ -31,12 +31,18 @@ import (
 // none.
 const defaultSecretKey = "token"
 
+// defaultTTL is the TTL of the challenge values added when the config
+// gives none.
+const defaultTTL = 600
+
 // config is a cert-manager Issuer's solver config.
 type config struct {
 	TokenSecretRef secretRef `json:"tokenSecretRef"`
 	// Zone is the zone the Challenge Target is written in; empty means
 	// the zone cert-manager resolved.
 	Zone string `json:"zone"`
+	// TTL is the TTL of the challenge values added.
+	TTL uint32 `json:"ttl"`
 }
 
 // secretRef names the Secret, in the request's ResourceNamespace, that
@@ -49,7 +55,7 @@ type secretRef struct {
 // parseConfig parses raw strictly, with an unknown field as an error, and
 // fills in the defaults.
 func parseConfig(raw *apiextensionsv1.JSON) (config, error) {
-	var cfg config
+	cfg := config{TTL: defaultTTL}
 
 	if raw != nil && len(raw.Raw) > 0 {
 		dec := json.NewDecoder(bytes.NewReader(raw.Raw))
@@ -66,6 +72,10 @@ func parseConfig(raw *apiextensionsv1.JSON) (config, error) {
 
 	if cfg.TokenSecretRef.Name == "" {
 		return config{}, invalidConfig("tokenSecretRef.name is required")
+	}
+
+	if cfg.TTL == 0 {
+		return config{}, invalidConfig("ttl must be positive")
 	}
 
 	if cfg.TokenSecretRef.Key == "" {
