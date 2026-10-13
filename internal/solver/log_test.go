@@ -109,7 +109,7 @@ func TestPresentLogsTheChallengeAndTheOutcome(t *testing.T) {
 				"namespace":       "team-a",
 				"dnsName":         "example.com",
 				"challengeTarget": "_acme-challenge.example.com.",
-				"zone":            "example.com.",
+				"zone":            "example.com",
 				"action":          "present",
 				"result":          tt.wantResult,
 			}
@@ -123,5 +123,43 @@ func TestPresentLogsTheChallengeAndTheOutcome(t *testing.T) {
 				t.Errorf("log field duration = %v, want a duration", line["duration"])
 			}
 		})
+	}
+}
+
+func TestEachCallLogsTheZoneItWritesIn(t *testing.T) {
+	tests := map[string]struct {
+		config string
+		want   string
+	}{
+		"resolved zone": {
+			config: `{"tokenSecretRef":{"name":"dnsgate"}}`,
+			want:   "example.com",
+		},
+		"configured zone": {
+			config: `{"tokenSecretRef":{"name":"dnsgate"},"zone":"com."}`,
+			want:   "com",
+		},
+		"configured zone that does not hold the name": {
+			config: `{"tokenSecretRef":{"name":"dnsgate"},"zone":"example.org"}`,
+			want:   "example.org",
+		},
+		"invalid config": {
+			config: `{"tokenSecretRef":{"name":"dnsgate"},"zone":"com","zones":[]}`,
+			want:   "example.com",
+		},
+	}
+
+	for callName, sc := range solverCalls {
+		for name, tt := range tests {
+			t.Run(callName+"/"+name, func(t *testing.T) {
+				s, logs := newLoggingSolver(t, "tok-a", nil)
+
+				_ = sc.call(s, sc.challenge(tt.config))
+
+				if got := logLine(t, logs)["zone"]; got != tt.want {
+					t.Errorf("log field zone = %v, want %v", got, tt.want)
+				}
+			})
+		}
 	}
 }

@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -155,34 +156,41 @@ type change struct {
 // call makes c at the Challenge Target of ch and logs it.
 func (s *Solver) call(ch *whapi.ChallengeRequest, c change) error {
 	start := time.Now()
-	err := s.patch(ch, c)
-	s.logCall(ch, c.act, err, time.Since(start))
+	zone, err := s.patch(ch, c)
+	s.logCall(ch, c.act, zone, err, time.Since(start))
 
 	return err
 }
 
 // patch makes c at the Challenge Target of ch: it reads the token from
 // the Secret the config of ch names and sends c to the Gateway in one
-// PatchRecord, bounded by the solver's timeout.
-func (s *Solver) patch(ch *whapi.ChallengeRequest, c change) error {
+// PatchRecord, bounded by the solver's timeout. It returns the zone it
+// writes in, or the zone it had chosen when it failed.
+func (s *Solver) patch(ch *whapi.ChallengeRequest, c change) (string, error) {
+	zone := strings.TrimSuffix(ch.ResolvedZone, ".")
+
 	deps := s.clients.Load()
 	if deps == nil {
-		return errors.New("the webhook is not initialized yet")
+		return zone, errors.New("the webhook is not initialized yet")
 	}
 
 	cfg, err := parseConfig(ch.Config)
 	if err != nil {
-		return err
+		return zone, err
 	}
 
-	target, err := challengeTarget(ch.ResolvedFQDN, ch.ResolvedZone)
+	if cfg.Zone != "" {
+		zone = strings.TrimSuffix(cfg.Zone, ".")
+	}
+
+	target, err := challengeTarget(ch.ResolvedFQDN, zone)
 	if err != nil {
-		return err
+		return zone, err
 	}
 
 	token, err := readToken(context.Background(), deps.secrets, ch.ResourceNamespace, cfg.TokenSecretRef)
 	if err != nil {
-		return err
+		return zone, err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), s.opts.Timeout)
@@ -198,10 +206,10 @@ func (s *Solver) patch(ch *whapi.ChallengeRequest, c change) error {
 		Remove: c.remove,
 	})
 	if err != nil {
-		return newGatewayFailure(err, c.ttl)
+		return zone, newGatewayFailure(err, c.ttl)
 	}
 
-	return nil
+	return zone, nil
 }
 
 // action is what a call of the solver does at the Challenge Target, as
@@ -214,9 +222,9 @@ const (
 	actionCleanUp action = "cleanup"
 )
 
-// logCall logs the outcome of act, a call for ch that took d and
-// ended with err. The line never carries the token or ch.Key.
-func (s *Solver) logCall(ch *whapi.ChallengeRequest, act action, err error, d time.Duration) {
+// logCall logs the outcome of act, a call for ch in zone that took d
+// and ended with err. The line never carries the token or ch.Key.
+func (s *Solver) logCall(ch *whapi.ChallengeRequest, act action, zone string, err error, d time.Duration) {
 	logger := s.opts.Logger
 	if logger == nil {
 		logger = slog.Default()
@@ -232,7 +240,7 @@ func (s *Solver) logCall(ch *whapi.ChallengeRequest, act action, err error, d ti
 		slog.String("namespace", ch.ResourceNamespace),
 		slog.String("dnsName", ch.DNSName),
 		slog.String("challengeTarget", ch.ResolvedFQDN),
-		slog.String("zone", ch.ResolvedZone),
+		slog.String("zone", zone),
 		slog.String("action", string(act)),
 		slog.String("result", result),
 		slog.Duration("duration", d),
