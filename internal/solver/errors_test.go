@@ -1,0 +1,104 @@
+/*
+Copyright 2026 DNS Gateway Team.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package solver_test
+
+import (
+	"context"
+	"testing"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	dnsgatev1 "github.com/dnsgateway/dnsgate-go/api/dnsgate/v1"
+)
+
+// gatewayError is the error the Gateway ends a call with: a gRPC status
+// with code and message, carrying detail when it is not nil.
+func gatewayError(code codes.Code, msg string, detail *dnsgatev1.Error) error {
+	st := status.New(code, msg)
+	if detail == nil {
+		return st.Err()
+	}
+
+	st, err := st.WithDetails(detail)
+	if err != nil {
+		panic(err)
+	}
+
+	return st.Err()
+}
+
+// gatewayFailures are a Gateway failure of every kind the webhook names,
+// and the message each gives the cert-manager Issuer author.
+var gatewayFailures = map[string]struct {
+	err  error
+	want string
+}{
+	"unauthenticated": {
+		err:  gatewayError(codes.Unauthenticated, "token not accepted", &dnsgatev1.Error{Category: dnsgatev1.Error_CATEGORY_UNAUTHENTICATED}),
+		want: "the Gateway refused the token",
+	},
+	"permission denied": {
+		err: gatewayError(codes.PermissionDenied, "token may not patch TXT _acme-challenge in zone example.com",
+			&dnsgatev1.Error{Category: dnsgatev1.Error_CATEGORY_PERMISSION_DENIED}),
+		want: "token may not patch TXT _acme-challenge in zone example.com",
+	},
+	"denied by provider": {
+		err: gatewayError(codes.FailedPrecondition, "provider refused",
+			&dnsgatev1.Error{Category: dnsgatev1.Error_CATEGORY_DENIED_BY_PROVIDER, ProviderStatus: 403}),
+		want: "the Provider refused the request: 403",
+	},
+	"invalid record": {
+		err:  gatewayError(codes.InvalidArgument, "ttl out of range", &dnsgatev1.Error{Category: dnsgatev1.Error_CATEGORY_INVALID_RECORD}),
+		want: "the Gateway refused TTL 600: check ttl against the Provider's range",
+	},
+	"conflict": {
+		err:  gatewayError(codes.Aborted, "rrset changed", &dnsgatev1.Error{Category: dnsgatev1.Error_CATEGORY_CONFLICT}),
+		want: "the Gateway call failed: conflict",
+	},
+	"rate limited": {
+		err:  gatewayError(codes.ResourceExhausted, "slow down", &dnsgatev1.Error{Category: dnsgatev1.Error_CATEGORY_RATE_LIMITED}),
+		want: "the Gateway call failed: rate limited",
+	},
+	"internal": {
+		err:  gatewayError(codes.Internal, "boom", &dnsgatev1.Error{Category: dnsgatev1.Error_CATEGORY_INTERNAL}),
+		want: "the Gateway call failed: internal",
+	},
+	"unavailable, no detail": {
+		err:  gatewayError(codes.Unavailable, "connection refused", nil),
+		want: "the Gateway call failed: unavailable",
+	},
+	"deadline exceeded, no detail": {
+		err:  gatewayError(codes.DeadlineExceeded, "context deadline exceeded", nil),
+		want: "the Gateway call failed: deadline exceeded",
+	},
+	"deadline exceeded before the stream opened": {
+		err:  context.DeadlineExceeded,
+		want: "the Gateway call failed: deadline exceeded",
+	},
+}
+
+func TestPresentNamesTheCauseOfAGatewayFailure(t *testing.T) {
+	for name, tt := range gatewayFailures {
+		t.Run(name, func(t *testing.T) {
+			s, gw := newSolver(tokenSecret("team-a", "dnsgate", map[string]string{"token": "tok-a"}))
+			gw.err = tt.err
+
+			checkError(t, s.Present(challenge(`{"tokenSecretRef":{"name":"dnsgate"}}`)), tt.want)
+		})
+	}
+}
