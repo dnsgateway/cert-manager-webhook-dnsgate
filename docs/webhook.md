@@ -290,7 +290,7 @@ The image is published as `ghcr.io/dnsgateway/cert-manager-webhook-dnsgate`, bui
 
 ```text
 cert-manager-webhook-dnsgate/
-  cmd/main.go                 cmd.RunWebhookServer(groupName, &solver{})
+  cmd/                    server.NewCommandStartWebhookServer(ctx, groupName, solver) + the webhook's own flags
   internal/solver/        Solver: config, Secret lookup, zone, Present, CleanUp
   charts/cert-manager-webhook-dnsgate/
   test/conformance/       cert-manager's DNS conformance suite
