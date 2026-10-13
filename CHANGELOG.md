@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1](https://github.com/dnsgateway/cert-manager-webhook-dnsgate/compare/v0.1.0...v0.1.1) (2026-10-13)
+
+
+### Bug Fixes
+
+* helm chart release ([cd40ac8](https://github.com/dnsgateway/cert-manager-webhook-dnsgate/commit/cd40ac88bfc8a7a3ca9c9dc775cc6bfd7467d556))
+* helm chart release ([a7072c2](https://github.com/dnsgateway/cert-manager-webhook-dnsgate/commit/a7072c20a2fa6d50f4319bee087b26f539d6aa49))
+
 ## [0.1.0](https://github.com/dnsgateway/cert-manager-webhook-dnsgate/compare/v0.0.1...v0.1.0) (2026-10-13)
 
 
