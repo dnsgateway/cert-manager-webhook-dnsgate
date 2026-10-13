@@ -1,0 +1,20 @@
+image:
+  pullPolicy: Always
+  tag: edge-arm64
+
+args:
+  - --v=4
+
+tls:
+  type: "helm"
+
+priorityClassName: system-cluster-critical
+
+podAntiAffinityPreset: hard
+podAntiAffinityPresetKey: kubernetes.io/hostname
+
+nodeSelector:
+  node-role.kubernetes.io/control-plane: ""
+tolerations:
+  - key: node-role.kubernetes.io/control-plane
+    effect: NoSchedule

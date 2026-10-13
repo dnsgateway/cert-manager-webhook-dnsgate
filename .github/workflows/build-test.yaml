@@ -9,6 +9,8 @@ on:
       - "go.sum"
       - "cmd/**"
       - "internal/**"
+      - "Makefile"
+      - "Dockerfile"
     types:
       - opened
       - reopened
@@ -47,3 +49,5 @@ jobs:
           args: --timeout=5m --config=.golangci.yml
       - name: Unit
         run: make unit
+      - name: Build
+        run: make build
