@@ -23,7 +23,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -81,6 +80,8 @@ func (deferredSolver) Name() string { return solver.Name }
 func newApp(ctx context.Context, groupName string) *app {
 	a := &app{}
 
+	logFormatErr := registerLogFormat()
+
 	cmd := server.NewCommandStartWebhookServer(ctx, groupName, &a.solver)
 	cmd.Use = "cert-manager-webhook-dnsgate"
 	cmd.Short = "the cert-manager Webhook: writes DNS-01 challenge values through the DNS Gateway"
@@ -89,15 +90,23 @@ func newApp(ctx context.Context, groupName string) *app {
 
 	f := flagsFromEnv()
 	f.addFlags(cmd.Flags())
+	defaultToLogFormat(cmd.Flags())
 
 	cmd.PreRunE = func(cmd *cobra.Command, _ []string) error {
+		if logFormatErr != nil {
+			return fmt.Errorf("registering the log format: %w", logFormatErr)
+		}
+
 		st, err := f.check(cmd.Flags(), groupName)
 		if err != nil {
 			return err
 		}
 
 		a.settings = st
-		slog.SetDefault(slog.New(slog.NewJSONHandler(cmd.ErrOrStderr(), &slog.HandlerOptions{Level: st.logLevel})))
+
+		if err := applyLogLevel(cmd.Flags(), cmd.ErrOrStderr(), st.logLevel); err != nil {
+			return err
+		}
 
 		a.solver.Solver = solver.New(solver.Options{
 			NewGateway: func() (solver.Gateway, error) { return dialGateway(st.gateway, st.tls) },
