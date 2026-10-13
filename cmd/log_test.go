@@ -54,6 +54,7 @@ func TestLogHelper(t *testing.T) {
 	}
 
 	klog.Error("klog error")
+	klog.Warning("klog warning")
 	klog.Info("klog info")
 	klog.V(4).Info("klog v4")
 	klog.V(5).Info("klog v5")
@@ -68,9 +69,10 @@ func TestLogHelper(t *testing.T) {
 func TestLogLevelAppliesToEveryLogLine(t *testing.T) {
 	tests := map[string][]string{
 		"error": {"klog error", "slog error"},
+		// klog hands a warning to the logger as an info line, so warn drops it.
 		"warn":  {"klog error", "slog error", "slog warn"},
-		"info":  {"klog error", "klog info", "slog error", "slog warn", "slog info"},
-		"debug": {"klog error", "klog info", "klog v4", "slog error", "slog warn", "slog info", "slog debug"},
+		"info":  {"klog error", "klog warning", "klog info", "slog error", "slog warn", "slog info"},
+		"debug": {"klog error", "klog warning", "klog info", "klog v4", "slog error", "slog warn", "slog info", "slog debug"},
 	}
 
 	for level, want := range tests {
