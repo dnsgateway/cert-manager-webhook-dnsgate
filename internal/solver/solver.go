@@ -169,6 +169,10 @@ func (s *Solver) patch(ch *whapi.ChallengeRequest, c change) (string, error) {
 		return zone, errors.New("the webhook is not initialized yet")
 	}
 
+	if ch.Type != dns01 {
+		return zone, errNotDNS01
+	}
+
 	cfg, err := parseConfig(ch.Config)
 	if err != nil {
 		return zone, err
@@ -180,6 +184,10 @@ func (s *Solver) patch(ch *whapi.ChallengeRequest, c change) (string, error) {
 
 	target, err := challengeTarget(ch.ResolvedFQDN, zone)
 	if err != nil {
+		return zone, err
+	}
+
+	if err := checkKey(ch.Key); err != nil {
 		return zone, err
 	}
 
