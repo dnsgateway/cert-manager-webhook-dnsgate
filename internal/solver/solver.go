@@ -199,6 +199,7 @@ func (s *Solver) patch(ch *whapi.ChallengeRequest, c change) (string, error) {
 
 	_, err = deps.gateway.PatchRecord(ctx, &dnsgatev1.PatchRecordRequest{
 		Token:  token,
+		Egress: cfg.egress,
 		Zone:   target.zone,
 		Name:   target.name,
 		Type:   "TXT",
