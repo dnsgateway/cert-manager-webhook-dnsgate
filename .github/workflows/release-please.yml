@@ -11,6 +11,9 @@ jobs:
     name: Release Please
     timeout-minutes: 15
     runs-on: ubuntu-24.04
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     permissions:
       contents: write
       pull-requests: write
@@ -22,3 +25,16 @@ jobs:
         with:
           config-file: .github/release-please-config.json
           manifest-file: .github/release-please-manifest.json
+
+  # publish:
+  #   name: Publish release artifacts
+  #   needs: release-please
+  #   if: needs.release-please.outputs.release_created == 'true'
+  #   permissions:
+  #     contents: write
+  #     packages: write
+  #     id-token: write
+  #   uses: ./.github/workflows/release.yaml
+  #   with:
+  #     tag: ${{ needs.release-please.outputs.tag_name }}
+  #   secrets: inherit

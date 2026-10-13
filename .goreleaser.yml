@@ -1,0 +1,61 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+project_name: cert-manager-webhook-dnsgate
+
+before:
+  hooks:
+    - go mod download
+
+dist: bin
+builds:
+  - id: webhook
+    main: ./cmd
+    binary: cert-manager-webhook-dnsgate
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .Commit }}
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+snapshot:
+  version_template: edge
+
+changelog:
+  disable: true
+
+archives:
+  - formats: [tar.gz]
+
+checksum:
+  name_template: checksums.txt
+
+dockers_v2:
+  - id: webhook
+    ids: [webhook]
+    flags:
+      - --target=gorelease
+    images:
+      - ghcr.io/dnsgateway/cert-manager-webhook-dnsgate
+    tags:
+      - "{{ if not .IsSnapshot }}v{{ .Version }}{{ else }}edge{{ end }}"
+    platforms: [linux/amd64, linux/arm64]
+    annotations:
+      org.opencontainers.image.name: "{{ .ProjectName }}"
+      org.opencontainers.image.licenses: Apache-2.0
+      org.opencontainers.image.source: https://github.com/dnsgateway/cert-manager-webhook-dnsgate
+      org.opencontainers.image.created: "{{ .Date }}"
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+
+docker_signs:
+  - id: webhook
+    cmd: cosign
+    args: [sign, --yes, "${artifact}"]
+    output: true

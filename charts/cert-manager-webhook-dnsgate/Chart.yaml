@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=https://json.schemastore.org/chart.json
+apiVersion: v2
+name: cert-manager-webhook-dnsgate
+description: cert-manager DNS-01 challenges through the DNS Gateway
+type: application
+home: https://github.com/dnsgateway/cert-manager-webhook-dnsgate
+sources:
+  - https://github.com/dnsgateway/cert-manager-webhook-dnsgate
+keywords:
+  - kubernetes
+  - dns
+  - webhook
+  - cert-manager
+maintainers:
+  - name: sergelogvinov
+    url: https://github.com/sergelogvinov
+#
+# Versions are expected to follow Semantic Versioning (https://semver.org/)
+version: 0.0.1
+#
+appVersion: v0.0.0
