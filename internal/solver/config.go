@@ -25,6 +25,8 @@ import (
 	"strings"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+
+	dnsgatev1 "github.com/dnsgateway/dnsgate-go/api/dnsgate/v1"
 )
 
 // defaultSecretKey is the key in the token Secret when the config gives
@@ -43,6 +45,19 @@ type config struct {
 	Zone string `json:"zone"`
 	// TTL is the TTL of the challenge values added.
 	TTL uint32 `json:"ttl"`
+	// Egress is gateway, agent or empty, for the Gateway to choose.
+	Egress string `json:"egress"`
+
+	// egress is Egress as the Gateway takes it.
+	egress dnsgatev1.Egress
+}
+
+// egresses are the egress values of the config and what each asks the
+// Gateway for.
+var egresses = map[string]dnsgatev1.Egress{
+	"":        dnsgatev1.Egress_EGRESS_UNSPECIFIED,
+	"gateway": dnsgatev1.Egress_EGRESS_GATEWAY,
+	"agent":   dnsgatev1.Egress_EGRESS_AGENT,
 }
 
 // secretRef names the Secret, in the request's ResourceNamespace, that
@@ -73,6 +88,13 @@ func parseConfig(raw *apiextensionsv1.JSON) (config, error) {
 	if cfg.TokenSecretRef.Name == "" {
 		return config{}, invalidConfig("tokenSecretRef.name is required")
 	}
+
+	egress, ok := egresses[cfg.Egress]
+	if !ok {
+		return config{}, invalidConfig(fmt.Sprintf("egress %q is not gateway or agent", cfg.Egress))
+	}
+
+	cfg.egress = egress
 
 	if cfg.TTL == 0 {
 		return config{}, invalidConfig("ttl must be positive")

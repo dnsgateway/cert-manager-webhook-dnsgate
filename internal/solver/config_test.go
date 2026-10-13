@@ -148,6 +148,68 @@ func TestEachCallRefusesAnInvalidTTL(t *testing.T) {
 	}
 }
 
+func TestEachCallPassesTheConfiguredEgress(t *testing.T) {
+	tests := map[string]struct {
+		config string
+		want   dnsgatev1.Egress
+	}{
+		"gateway": {config: `{"tokenSecretRef":{"name":"dnsgate"},"egress":"gateway"}`, want: dnsgatev1.Egress_EGRESS_GATEWAY},
+		"agent":   {config: `{"tokenSecretRef":{"name":"dnsgate"},"egress":"agent"}`, want: dnsgatev1.Egress_EGRESS_AGENT},
+		"unset":   {config: `{"tokenSecretRef":{"name":"dnsgate"}}`, want: dnsgatev1.Egress_EGRESS_UNSPECIFIED},
+	}
+
+	for callName, sc := range solverCalls {
+		for name, tt := range tests {
+			t.Run(callName+"/"+name, func(t *testing.T) {
+				s, gw := newSolver(tokenSecret("team-a", "dnsgate", map[string]string{"token": "tok-a"}))
+
+				if err := sc.call(s, sc.challenge(tt.config)); err != nil {
+					t.Fatalf("%s: %v", callName, err)
+				}
+
+				want := sc.want("tok-a", "example.com", "_acme-challenge")
+				want.Egress = tt.want
+				checkOneRequest(t, gw, want)
+			})
+		}
+	}
+}
+
+func TestEachCallRefusesAnInvalidEgress(t *testing.T) {
+	tests := map[string]struct {
+		config string
+		want   string
+	}{
+		"unknown": {
+			config: `{"tokenSecretRef":{"name":"dnsgate"},"egress":"proxy"}`,
+			want:   `invalid solver config: egress "proxy" is not gateway or agent`,
+		},
+		"other case": {
+			config: `{"tokenSecretRef":{"name":"dnsgate"},"egress":"Gateway"}`,
+			want:   `invalid solver config: egress "Gateway" is not gateway or agent`,
+		},
+		"enum name": {
+			config: `{"tokenSecretRef":{"name":"dnsgate"},"egress":"EGRESS_AGENT"}`,
+			want:   `invalid solver config: egress "EGRESS_AGENT" is not gateway or agent`,
+		},
+		"number": {
+			config: `{"tokenSecretRef":{"name":"dnsgate"},"egress":1}`,
+			want:   "invalid solver config: egress cannot be a JSON number",
+		},
+	}
+
+	for callName, sc := range solverCalls {
+		for name, tt := range tests {
+			t.Run(callName+"/"+name, func(t *testing.T) {
+				s, gw := newSolver(tokenSecret("team-a", "dnsgate", map[string]string{"token": "tok-a"}))
+
+				checkError(t, sc.call(s, sc.challenge(tt.config)), tt.want)
+				checkNoRequest(t, gw)
+			})
+		}
+	}
+}
+
 func TestEachCallRefusesANameOutsideTheConfiguredZone(t *testing.T) {
 	tests := map[string]struct {
 		zone, fqdn string
