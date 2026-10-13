@@ -57,6 +57,12 @@ unit: ## Run tests with the race detector
 
 test: lint unit ## Run lint and unit tests
 
+E2E_TIMEOUT ?= 30m
+
+.PHONY: e2e
+e2e: ## Issue a certificate through the webhook deployed in the cluster of $KUBECONFIG (see README)
+	go test -tags e2e -count=1 -timeout $(E2E_TIMEOUT) -v ./test/e2e
+
 ############
 
 .PHONY: licenses
