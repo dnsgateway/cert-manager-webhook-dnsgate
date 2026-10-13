@@ -46,15 +46,38 @@ type config struct {
 	// TTL is the TTL of the challenge values added.
 	TTL uint32 `json:"ttl"`
 	// Egress is gateway, agent or empty, for the Gateway to choose.
-	Egress string `json:"egress"`
-
-	// egress is Egress as the Gateway takes it.
-	egress dnsgatev1.Egress
+	Egress egress `json:"egress"`
 }
 
-// egresses are the egress values of the config and what each asks the
+// egress is the Egress a config asks the Gateway for. It decodes from
+// its name in egressByName.
+type egress dnsgatev1.Egress
+
+// UnmarshalJSON decodes the name of an egress.
+func (e *egress) UnmarshalJSON(data []byte) error {
+	var name string
+	if err := json.Unmarshal(data, &name); err != nil {
+		// The decoder does not name the field of an error from here.
+		if typeErr, ok := errors.AsType[*json.UnmarshalTypeError](err); ok {
+			typeErr.Field = "egress"
+		}
+
+		return err
+	}
+
+	v, ok := egressByName[name]
+	if !ok {
+		return fmt.Errorf("egress %q is not gateway or agent", name)
+	}
+
+	*e = egress(v)
+
+	return nil
+}
+
+// egressByName maps the egress names of the config to what each asks the
 // Gateway for.
-var egresses = map[string]dnsgatev1.Egress{
+var egressByName = map[string]dnsgatev1.Egress{
 	"":        dnsgatev1.Egress_EGRESS_UNSPECIFIED,
 	"gateway": dnsgatev1.Egress_EGRESS_GATEWAY,
 	"agent":   dnsgatev1.Egress_EGRESS_AGENT,
@@ -97,13 +120,6 @@ func parseConfig(raw *apiextensionsv1.JSON) (config, error) {
 
 		cfg.Zone = zone
 	}
-
-	egress, ok := egresses[cfg.Egress]
-	if !ok {
-		return config{}, invalidConfig(fmt.Sprintf("egress %q is not gateway or agent", cfg.Egress))
-	}
-
-	cfg.egress = egress
 
 	if cfg.TTL == 0 {
 		return config{}, invalidConfig("ttl must be positive")
