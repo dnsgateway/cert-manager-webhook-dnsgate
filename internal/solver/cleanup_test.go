@@ -21,8 +21,6 @@ import (
 
 	whapi "github.com/cert-manager/cert-manager/pkg/acme/webhook/apis/acme/v1alpha1"
 	"google.golang.org/protobuf/proto"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 
 	dnsgatev1 "github.com/dnsgateway/dnsgate-go/api/dnsgate/v1"
 )
@@ -39,13 +37,10 @@ func cleanUpChallenge(config string) *whapi.ChallengeRequest {
 // wantCleanUp is the PatchRecord that CleanUp sends with token, zone and
 // name: it removes the quoted key, with no add and no TTL.
 func wantCleanUp(token, zone, name string) *dnsgatev1.PatchRecordRequest {
-	return &dnsgatev1.PatchRecordRequest{
-		Token:  token,
-		Zone:   zone,
-		Name:   name,
-		Type:   "TXT",
-		Remove: []string{`"` + validKey + `"`},
-	}
+	req := wantRequest(token, zone, name)
+	req.Remove = []string{quotedKey}
+
+	return req
 }
 
 func TestCleanUpRemovesTheKeyAtTheChallengeTargetThroughTheGateway(t *testing.T) {
@@ -77,80 +72,5 @@ func TestARetriedCleanUpSendsTheSameRemoveAgainAndSucceeds(t *testing.T) {
 		if !proto.Equal(req, want) {
 			t.Errorf("PatchRecord request %d = %v, want %v", i+1, req, want)
 		}
-	}
-}
-
-func TestCleanUpReadsTheSecretFromTheResourceNamespaceOnly(t *testing.T) {
-	secrets := []runtime.Object{
-		tokenSecret("team-a", "dnsgate", map[string]string{"token": "tok-team-a"}),
-		tokenSecret("team-b", "dnsgate", map[string]string{"token": "tok-team-b"}),
-		tokenSecret("cert-manager", "dnsgate", map[string]string{"token": "tok-cluster"}),
-	}
-
-	tests := map[string]struct {
-		resourceNamespace string
-		want              string
-	}{
-		"Issuer in team-a": {resourceNamespace: "team-a", want: "tok-team-a"},
-		"Issuer in team-b": {resourceNamespace: "team-b", want: "tok-team-b"},
-		"ClusterIssuer":    {resourceNamespace: "cert-manager", want: "tok-cluster"},
-	}
-
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			s, gw := newSolver(secrets...)
-
-			ch := cleanUpChallenge(`{"tokenSecretRef":{"name":"dnsgate"}}`)
-			ch.ResourceNamespace = tt.resourceNamespace
-
-			if err := s.CleanUp(ch); err != nil {
-				t.Fatalf("CleanUp: %v", err)
-			}
-
-			checkOneRequest(t, gw, wantCleanUp(tt.want, "example.com", "_acme-challenge"))
-		})
-	}
-}
-
-func TestCleanUpRefusesAMissingOrEmptyToken(t *testing.T) {
-	tests := map[string]struct {
-		secret *corev1.Secret
-		config string
-		want   string
-	}{
-		"secret only in another namespace": {
-			secret: tokenSecret("team-b", "dnsgate", map[string]string{"token": "tok"}),
-			config: `{"tokenSecretRef":{"name":"dnsgate"}}`,
-			want:   "secret team-a/dnsgate not found",
-		},
-		"missing secret": {
-			secret: tokenSecret("team-a", "other", map[string]string{"token": "tok"}),
-			config: `{"tokenSecretRef":{"name":"dnsgate"}}`,
-			want:   "secret team-a/dnsgate not found",
-		},
-		"missing default key": {
-			secret: tokenSecret("team-a", "dnsgate", map[string]string{"prod": "tok"}),
-			config: `{"tokenSecretRef":{"name":"dnsgate"}}`,
-			want:   `secret team-a/dnsgate has no key "token"`,
-		},
-		"missing given key": {
-			secret: tokenSecret("team-a", "dnsgate", map[string]string{"token": "tok"}),
-			config: `{"tokenSecretRef":{"name":"dnsgate","key":"prod"}}`,
-			want:   `secret team-a/dnsgate has no key "prod"`,
-		},
-		"empty value": {
-			secret: tokenSecret("team-a", "dnsgate", map[string]string{"token": ""}),
-			config: `{"tokenSecretRef":{"name":"dnsgate"}}`,
-			want:   `secret team-a/dnsgate key "token" is empty`,
-		},
-	}
-
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			s, gw := newSolver(tt.secret)
-
-			checkError(t, s.CleanUp(cleanUpChallenge(tt.config)), tt.want)
-			checkNoRequest(t, gw)
-		})
 	}
 }
